@@ -18,6 +18,7 @@ export default function AccountingDashboard() {
   const [showBusinessDebtModal, setShowBusinessDebtModal] = useState(false);
   const [message, setMessage] = useState('');
   const [showReports, setShowReports] = useState(false);
+
   useEffect(() => {
     loadDashboard();
   }, []);
@@ -110,13 +111,14 @@ export default function AccountingDashboard() {
           <span className="text-2xl mb-2">🏪</span>
           <span className="font-semibold">Deuda de negocio</span>
         </button>
+        {/* Botón para reportes 
         <button
           onClick={() => setShowReports(true)}
           className="p-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex flex-col items-center"
         >
           <span className="text-2xl mb-2">📊</span>
           <span className="font-semibold">Reportes</span>
-        </button>
+        </button>*/}
       </div>
 
       {/* Tarjetas de resumen */}

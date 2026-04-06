@@ -3,14 +3,19 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './modules/login/contexts/AuthContext';
 import { useModules } from './modules/core/contexts/ModuleContext';
 
+import { initSocket, getSocket, requestNotificationPermission, showNotification } from './shared/services/socketService';
+import { useEffect } from 'react';
+
+// Core
 import Login from './modules/login/pages/Login';
 import Register from './modules/login/pages/Register';
 import Landing from './pages/Landing';
-import Home from './pages/Home';
+
+// Admin
 import AdminDashboard from './modules/admin/pages/AdminDashboard';
-import SuperAdminLogin from './pages/SuperAdmin/Login';
-import SuperAdminDashboard from './pages/SuperAdmin/Dashboard';
 import SectionsManager from './modules/landing/pages/SectionManager';
+
+// Ecommerce
 import Catalog from './modules/ecommerce/pages/Catalog';
 import ProductDetail from './modules/ecommerce/pages/ProductDetail';
 import Cart from './modules/ecommerce/pages/Cart';
@@ -18,30 +23,130 @@ import Checkout from './modules/ecommerce/pages/Checkout';
 import OrderConfirmation from './modules/ecommerce/pages/OrderConfirmation';
 import MyOrders from './modules/ecommerce/pages/MyOrders';
 import OrderTracking from './modules/ecommerce/pages/OrderTracking';
-import Profile from './modules/login/pages/Profile';
 import Wishlist from './modules/ecommerce/pages/Wishlist';
+
+// Appointments
 import Services from './modules/appointments/pages/Services';
 import ServiceDetail from './modules/appointments/pages/ServiceDetail';
 import Booking from './modules/appointments/pages/Booking';
 import MyBookings from './modules/appointments/pages/MyBookings';
 
+// POS e Inventario
+import POSDashboard from './modules/pos/pages/POSDashboard';
+import InventoryManager from './modules/inventory/pages/InventoryManager';
+import AccountingDashboard from './modules/accounting/pages/AccountingDashboard';
+import Profile from './modules/login/pages/Profile';
 
+// Superadmin
+import SuperAdminLogin from './pages/SuperAdmin/Login';
+import SuperAdminDashboard from './pages/SuperAdmin/Dashboard';
 
+// ============================================
+// CONSTANTES
+// ============================================
+
+const ROLES = {
+  SUPERADMIN: 'superadmin',
+  ADMIN: 'admin',
+  EMPLOYEE: 'employee',
+  USER: 'user'
+};
+
+// ============================================
+// COMPONENTE DE RUTA PROTEGIDA
+// ============================================
+function ProtectedRoute({ children, allowedRoles, redirectTo = '/login' }) {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
+  }
+  
+  if (!user) {
+    return <Navigate to={redirectTo} replace />;
+  }
+  
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to={redirectTo} replace />;
+  }
+  
+  return children;
+}
+
+// ============================================
+// COMPONENTE DE RUTA PÚBLICA
+// ============================================
+function PublicRoute({ children }) {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
+  }
+  
+  if (user) {
+    if (user.role === ROLES.ADMIN) return <Navigate to="/admin" replace />;
+    if (user.role === ROLES.EMPLOYEE) return <Navigate to="/admin" replace />;
+    return <Navigate to="/" replace />;
+  }
+  
+  return children;
+}
+
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 function App() {
   const { user, loading: authLoading } = useAuth();
   const { hasModule, loading: modulesLoading } = useModules();
 
+  useEffect(() => {
+    if (user && (user.role === 'admin' || user.role === 'superadmin')) {
+      console.log('👤 Admin:', user);
+      
+      // Asegurar que userId sea string
+      const userId = String(user.id || user._id);
+      console.log('📝 UserId:', userId);
+      
+      const socket = initSocket(userId);
+      
+      requestNotificationPermission();
+      
+      if (socket) {
+        socket.on('new-notification', (notification) => {
+          console.log('🔔 Notificación:', notification);
+          
+          showNotification(notification.title, {
+            body: notification.body,
+            icon: '/vite.svg',
+            data: notification.data
+          });
+        });
+        
+        socket.on('user-registered', (data) => {
+          console.log('✅ Registro confirmado:', data);
+        });
+      }
+    }
+  }, [user]);
+
   if (authLoading || modulesLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Cargando...</div>
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
   }
 
   const loginEnabled = hasModule('login');
   const hasEcommerce = hasModule('ecommerce');
   const hasAppointments = hasModule('appointments');
+  const hasAccounting = hasModule('accounting');
+  const hasPOS = hasModule('pos');
+  const hasInventory = hasModule('inventory');
+  const hasLandingCustomization = hasModule('landingCustomization');
+
+  const getDefaultRedirect = () => {
+    if (!user) return '/login';
+    if (user.role === ROLES.ADMIN) return '/admin';
+    if (user.role === ROLES.EMPLOYEE) return '/admin';
+    return '/';
+  };
 
   return (
     <BrowserRouter>
@@ -50,44 +155,17 @@ function App() {
         <Route path="/superadmin" element={<SuperAdminLogin />} />
         <Route path="/superadmin/dashboard" element={<SuperAdminDashboard />} />
 
-        {/* Login/Register */}
+        {/* Rutas públicas */}
         {loginEnabled && (
           <>
-            <Route
-              path="/login"
-              element={
-                user ? <Navigate to={user.role === 'admin' ? "/admin" : "/home"} replace /> : <Login />
-              }
-            />
-            <Route
-              path="/register"
-              element={
-                user ? <Navigate to={user.role === 'admin' ? "/admin" : "/home"} replace /> : <Register />
-              }
-            />
+            <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+            <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
           </>
         )}
+        
+        <Route path="/" element={<PublicRoute><Login /></PublicRoute>} />
 
-        {/* Landing Page */}
-        <Route
-          path="/"
-          element={
-            !loginEnabled ? (
-              <Landing />
-            ) : user ? (
-              // Si es admin, redirigir a /admin, si no a /home
-              user.role === 'admin' ? (
-                <Navigate to="/admin" replace />
-              ) : (
-                <Navigate to="/home" replace />
-              )
-            ) : (
-              <Landing />
-            )
-          }
-        />
-
-        {/* Ecommerce - solo si el módulo está activo */}
+        {/* Ecommerce */}
         {hasEcommerce && (
           <>
             <Route path="/catalogo" element={<Catalog />} />
@@ -95,60 +173,92 @@ function App() {
             <Route path="/carrito" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/pedido/confirmacion/:orderNumber" element={<OrderConfirmation />} />
-            <Route path="/mis-pedidos" element={<MyOrders />} />
+            <Route path="/mis-pedidos" element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
             <Route path="/pedido/seguimiento/:orderNumber" element={<OrderTracking />} />
-            <Route path="/perfil" element={<Profile />} />
-            <Route path="/wishlist" element={<Wishlist />} />
+            <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
           </>
         )}
 
-        {hasAppointments &&(
+        {/* Reservas */}
+        {hasAppointments && (
           <>
             <Route path="/servicios" element={<Services />} />
             <Route path="/servicio/:id" element={<ServiceDetail />} />
-            <Route path="/reservar/:serviceId" element={<Booking />} />
-            <Route path="/mis-reservas" element={<MyBookings />} />
+            <Route path="/reservar/:serviceId" element={<ProtectedRoute><Booking /></ProtectedRoute>} />
+            <Route path="/mis-reservas" element={<ProtectedRoute><MyBookings /></ProtectedRoute>} />
           </>
         )}
 
-        {/* Home - solo para usuarios normales (no admin) */}
-        <Route
-          path="/home"
+        {/* POS */}
+        {hasPOS && (
+          <Route 
+            path="/pos" 
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]} redirectTo="/login">
+                <POSDashboard />
+              </ProtectedRoute>
+            } 
+          />
+        )}
+
+        {/* Inventario */}
+        {hasInventory && (
+          <Route 
+            path="/inventario" 
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]} redirectTo="/login">
+                <InventoryManager />
+              </ProtectedRoute>
+            } 
+          />
+        )}
+
+        {/* Contabilidad - solo admin */}
+        {hasAccounting && (
+          <Route 
+            path="/contabilidad" 
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ADMIN]} redirectTo="/login">
+                <AccountingDashboard />
+              </ProtectedRoute>
+            } 
+          />
+        )}
+
+        {/* Perfil */}
+        <Route 
+          path="/perfil" 
           element={
-            loginEnabled && user && user.role !== 'admin' ? (
-              <Home />
-            ) : loginEnabled && !user ? (
-              <Navigate to="/login" />
-            ) : (
-              <Navigate to="/admin" />
-            )
-          }
+            <ProtectedRoute redirectTo="/login">
+              <Profile />
+            </ProtectedRoute>
+          } 
         />
 
-        {/* Panel Admin - solo para admin */}
-        <Route
-          path="/admin"
+        {/* Admin Dashboard - admin y empleado */}
+        <Route 
+          path="/admin" 
           element={
-            user && user.role === 'admin'
-              ? <AdminDashboard />
-              : <Navigate to={loginEnabled ? "/login" : "/"} />
-          }
+            <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]} redirectTo={getDefaultRedirect()}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } 
         />
         
-        {/* Sections Manager - solo si tiene el módulo de personalización */}
-        {hasModule('landingCustomization') && (
-          <Route
-            path="/admin/sections"
+        {/* Sections Manager - solo admin */}
+        {hasLandingCustomization && (
+          <Route 
+            path="/admin/sections" 
             element={
-              user && user.role === 'admin'
-                ? <SectionsManager />
-                : <Navigate to={loginEnabled ? "/login" : "/"} />
-            }
+              <ProtectedRoute allowedRoles={[ROLES.ADMIN]} redirectTo="/admin">
+                <SectionsManager />
+              </ProtectedRoute>
+            } 
           />
         )}
 
         {/* 404 */}
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="*" element={<Navigate to={getDefaultRedirect()} replace />} />
       </Routes>
     </BrowserRouter>
   );

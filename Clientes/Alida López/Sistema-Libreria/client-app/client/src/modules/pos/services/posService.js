@@ -11,7 +11,12 @@ export const getProductByBarcode = async (barcode) => {
   return data;
 };
 
+export const getProductVariants = async (productId) => {
+  const { data } = await api.get(`/pos/product/${productId}/variants`);
+  return data;
+};
+
 export const registerSale = async (saleData) => {
   const { data } = await api.post('/pos/sale', saleData);
   return data;
-};
+}; 

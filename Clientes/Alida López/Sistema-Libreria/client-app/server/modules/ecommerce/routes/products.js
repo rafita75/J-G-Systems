@@ -2,14 +2,14 @@
 const express = require('express');
 const Product = require('../models/Product');
 const auth = require('../../login/middleware/auth');
-const { requirePermission } = require('../../../shared/middleware/permissions');  
+const User = require('../../login/models/User');
 
 const router = express.Router();
 
 // ============================================
 // OBTENER TODOS LOS PRODUCTOS (público)
 // ============================================
-router.get('/', auth, requirePermission('viewProducts'), async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { category, search, limit = 12, page = 1 } = req.query;
     const query = { isActive: true };
@@ -83,13 +83,23 @@ router.get('/:slug', async (req, res) => {
 // ============================================
 router.get('/admin/all', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (req.user.role === 'admin' || req.user.role === 'superadmin') {
+      const products = await Product.find().sort({ createdAt: -1 }).populate('categoryId');
+      return res.json(products);
     }
     
-    const products = await Product.find().sort({ createdAt: -1 }).populate('categoryId');
-    res.json(products);
+    if (req.user.role === 'employee') {
+      const user = await User.findById(req.user.id);
+      if (user?.permissions?.viewProducts === true) {
+        const products = await Product.find().sort({ createdAt: -1 }).populate('categoryId');
+        return res.json(products);
+      }
+      return res.status(403).json({ error: 'No tienes permiso' });
+    }
+    
+    return res.status(403).json({ error: 'No autorizado' });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Error al obtener productos' });
   }
 });
@@ -103,26 +113,24 @@ router.post('/', auth, async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
-    const productData = req.body;
+    // Limpiar datos antes de guardar
+    const productData = { ...req.body };
     
-    // Generar slug si no viene
-    if (!productData.slug && productData.name) {
-      productData.slug = productData.name
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
+    // Eliminar SKU si viene vacío (dejar que el middleware lo genere)
+    if (productData.sku === '' || !productData.sku) {
+      delete productData.sku;
+    }
+    
+    // Eliminar slug si viene (dejar que el middleware lo genere)
+    if (productData.slug === '' || !productData.slug) {
+      delete productData.slug;
     }
     
     const product = new Product(productData);
     await product.save();
     res.status(201).json(product);
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ error: 'El slug o SKU ya existe' });
-    }
-    console.error(error);
+    console.error('Error al crear producto:', error);
     res.status(500).json({ error: 'Error al crear producto: ' + error.message });
   }
 });
@@ -130,16 +138,21 @@ router.post('/', auth, async (req, res) => {
 // ============================================
 // ACTUALIZAR PRODUCTO (solo admin)
 // ============================================
-router.put('/:id', auth, requirePermission('editProducts'), async (req, res) => {
+router.put('/:id', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
+    const productData = { ...req.body };
+    
+    // No permitir modificar SKU si ya existe
+    delete productData.sku;
+    
     const product = await Product.findByIdAndUpdate(
       req.params.id,
-      { ...req.body, updatedAt: Date.now() },
-      { new: true }
+      { ...productData, updatedAt: Date.now() },
+      { new: true, runValidators: false }
     );
     
     if (!product) {
@@ -148,6 +161,7 @@ router.put('/:id', auth, requirePermission('editProducts'), async (req, res) => 
     
     res.json(product);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Error al actualizar producto' });
   }
 });
@@ -155,7 +169,7 @@ router.put('/:id', auth, requirePermission('editProducts'), async (req, res) => 
 // ============================================
 // ELIMINAR PRODUCTO (solo admin)
 // ============================================
-router.delete('/:id', auth, requirePermission('deleteProducts'), async (req, res) => {
+router.delete('/:id', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'No autorizado' });
@@ -182,7 +196,6 @@ router.get('/related/:productId', async (req, res) => {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
     
-    // Buscar productos de la misma categoría, excluyendo el actual
     const related = await Product.find({
       _id: { $ne: product._id },
       isActive: true,
@@ -191,7 +204,6 @@ router.get('/related/:productId', async (req, res) => {
     .limit(4)
     .populate('categoryId');
     
-    // Si no hay suficientes de la misma categoría, buscar destacados
     if (related.length < 4) {
       const featured = await Product.find({
         _id: { $ne: product._id },
@@ -211,8 +223,6 @@ router.get('/related/:productId', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener productos relacionados' });
   }
 });
-
-module.exports = router;
 
 // ============================================
 // OBTENER PRODUCTO POR CÓDIGO DE BARRAS
@@ -234,3 +244,5 @@ router.get('/barcode/:code', async (req, res) => {
     res.status(500).json({ error: 'Error al buscar por código de barras' });
   }
 });
+
+module.exports = router;

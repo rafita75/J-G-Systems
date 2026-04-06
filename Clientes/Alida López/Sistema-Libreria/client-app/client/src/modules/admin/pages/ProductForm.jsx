@@ -1,31 +1,70 @@
 // client/src/pages/Admin/ProductForm.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createProduct, updateProduct } from '../../../shared/services/productService';
 import Button from '../../core/components/UI/Button';
 import Input from '../../core/components/UI/Input';
 import MultiImageUpload from '../../../shared/components/upload/MultiImageUpload';
+import VariantManager from './VariantManager';
 
 export default function ProductForm({ product, categories, onSuccess, onCancel }) {
+  // ============================================
+  // ESTADOS GENERALES
+  // ============================================
+  const [hasVariants, setHasVariants] = useState(product?.hasVariants || false);
+  const [variants, setVariants] = useState(product?.variants || []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  // ============================================
+  // CAMPOS GENERALES (siempre visibles)
+  // ============================================
   const [formData, setFormData] = useState({
     name: product?.name || '',
     description: product?.description || '',
-    price: product?.price || '',
-    stock: product?.stock || '',
-    minStock: product?.minStock || 5,
-    barcode: product?.barcode || '',
-    sku: product?.sku || '',
+    brand: product?.brand || '',
+    provider: product?.provider || '',
+    expiryDate: product?.expiryDate ? product.expiryDate.split('T')[0] : '',
     categoryId: product?.categoryId?._id || '',
     isFeatured: product?.isFeatured || false,
-    images: product?.images || []
+    images: product?.images || [],
+    sku: product?.sku || '',
+    barcode: product?.barcode || '',
+    price: product?.price || '',
+    purchasePrice: product?.purchasePrice || '',
+    stock: product?.stock || '',
+    minStock: product?.minStock || 5,
+    comparePrice: product?.comparePrice || 0
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
+  // ============================================
+  // CALCULAR STOCK TOTAL Y RANGO DE PRECIOS
+  // ============================================
+  useEffect(() => {
+    if (hasVariants && variants.length > 0) {
+      const totalStock = variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+      const prices = variants.map(v => v.price || 0).filter(p => p > 0);
+      const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+      const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+      
+      setFormData(prev => ({
+        ...prev,
+        stock: totalStock,
+        price: minPrice,
+        comparePrice: maxPrice > minPrice ? maxPrice : 0,
+        images: variants[0]?.image ? [{ url: variants[0].image, file: null }] : prev.images
+      }));
+    }
+  }, [variants, hasVariants]);
+
+  // ============================================
+  // HANDLERS
+  // ============================================
   const handleImagesChange = (images) => {
-    setFormData(prev => ({
-      ...prev,
-      images: images
-    }));
+    setFormData(prev => ({ ...prev, images: images }));
+  };
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
@@ -33,18 +72,43 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
     setLoading(true);
     setError('');
     
+    // Limpiar SKU temporal si es producto nuevo
     const submitData = {
       ...formData,
+      price: parseFloat(formData.price) || 0,
+      purchasePrice: parseFloat(formData.purchasePrice) || 0,
+      stock: parseInt(formData.stock) || 0,
+      minStock: parseInt(formData.minStock) || 5,
+      comparePrice: parseFloat(formData.comparePrice) || 0,
       thumbnail: formData.images[0]?.url || '',
-      images: formData.images
+      images: formData.images,
+      hasVariants: hasVariants,
+      variants: hasVariants ? variants : []
     };
     
+    // Si es producto nuevo, eliminar SKU para que el backend lo genere
+    if (!product) {
+      delete submitData.sku;
+    }
+    
+    if (hasVariants) {
+      submitData.purchasePrice = 0;
+      submitData.barcode = '';
+    }
+    
     try {
+      let result;
       if (product) {
-        await updateProduct(product._id, submitData);
+        result = await updateProduct(product._id, submitData);
       } else {
-        await createProduct(submitData);
+        result = await createProduct(submitData);
       }
+      
+      // Actualizar el SKU devuelto por el backend
+      if (result && result.sku) {
+        setFormData(prev => ({ ...prev, sku: result.sku }));
+      }
+      
       onSuccess();
     } catch (err) {
       setError(err.response?.data?.error || 'Error al guardar producto');
@@ -53,12 +117,8 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
     }
   };
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
   return (
-    <div className="bg-white rounded-2xl shadow-soft p-6 animate-fade-in">
+    <div className="bg-white rounded-2xl shadow-soft p-6 animate-fade-in max-h-[90vh] overflow-auto">
       <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
         {product ? '✏️ Editar Producto' : '➕ Nuevo Producto'}
       </h3>
@@ -70,9 +130,32 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
       )}
       
       <form onSubmit={handleSubmit} className="space-y-5">
+        {/* ============================================
+            PRIMERO: ¿TIENE VARIANTES?
+        ============================================ */}
+        <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={hasVariants}
+              onChange={(e) => setHasVariants(e.target.checked)}
+              className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500"
+            />
+            <span className="font-medium text-gray-900">
+              Este producto tiene variantes (tallas, colores, versiones)
+            </span>
+          </label>
+          <p className="text-xs text-gray-500 mt-2 ml-8">
+            Si activas esta opción, podrás agregar múltiples variantes con diferentes precios, stock y códigos de barras.
+          </p>
+        </div>
+
+        {/* ============================================
+            CAMPOS GENERALES (siempre visibles)
+        ============================================ */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
-            label="Nombre *"
+            label="Nombre del producto *"
             name="name"
             type="text"
             value={formData.name}
@@ -83,73 +166,47 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
           />
           
           <Input
-            label="SKU (código único)"
+            label="SKU general"
             name="sku"
             type="text"
             value={formData.sku}
             onChange={handleChange}
-            placeholder="Ej: CAM-001"
+            placeholder="Se genera automáticamente al guardar"
             icon="🔢"
+            disabled={!!product}
           />
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
-            label="Código de barras"
-            name="barcode"
+            label="Marca"
+            name="brand"
             type="text"
-            value={formData.barcode}
+            value={formData.brand}
             onChange={handleChange}
-            placeholder="Ej: 7501000012345"
-            icon="📷"
+            placeholder="Ej: Nike, Adidas, Editorial Planeta"
+            icon="🏷️"
           />
           
           <Input
-            label="Stock mínimo (alerta)"
-            name="minStock"
-            type="number"
-            value={formData.minStock}
+            label="Proveedor"
+            name="provider"
+            type="text"
+            value={formData.provider}
             onChange={handleChange}
-            placeholder="5"
-            icon="⚠️"
+            placeholder="Ej: Distribuidora XYZ"
+            icon="🚚"
           />
         </div>
         
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Descripción *</label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-            rows="5"
-            placeholder="Describe el producto..."
-            required
-          />
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
-            label="Precio *"
-            name="price"
-            type="number"
-            value={formData.price}
+            label="Fecha de vencimiento (opcional)"
+            name="expiryDate"
+            type="date"
+            value={formData.expiryDate}
             onChange={handleChange}
-            placeholder="0.00"
-            required
-            step="0.01"
-            icon="💰"
-          />
-          
-          <Input
-            label="Stock *"
-            name="stock"
-            type="number"
-            value={formData.stock}
-            onChange={handleChange}
-            placeholder="0"
-            required
-            icon="📊"
+            icon="📅"
           />
           
           <div>
@@ -167,19 +224,115 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
             </select>
           </div>
         </div>
+
+        {/* ============================================
+            SECCIÓN SIN VARIANTES (precio, stock, código)
+        ============================================ */}
+        {!hasVariants && (
+          <div className="border-t pt-4">
+            <h4 className="font-medium text-gray-900 mb-3">Información de inventario</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Precio de compra"
+                name="purchasePrice"
+                type="number"
+                value={formData.purchasePrice}
+                onChange={handleChange}
+                placeholder="0.00"
+                step="0.01"
+                icon="📥"
+              />
+              
+              <Input
+                label="Precio de venta *"
+                name="price"
+                type="number"
+                value={formData.price}
+                onChange={handleChange}
+                placeholder="0.00"
+                required={!hasVariants}
+                step="0.01"
+                icon="💰"
+              />
+              
+              <Input
+                label="Código de barras"
+                name="barcode"
+                type="text"
+                value={formData.barcode}
+                onChange={handleChange}
+                placeholder="Ej: 7501000012345"
+                icon="📷"
+              />
+              
+              <Input
+                label="Stock *"
+                name="stock"
+                type="number"
+                value={formData.stock}
+                onChange={handleChange}
+                placeholder="0"
+                required={!hasVariants}
+                icon="📊"
+              />
+              
+              <Input
+                label="Stock mínimo (alerta)"
+                name="minStock"
+                type="number"
+                value={formData.minStock}
+                onChange={handleChange}
+                placeholder="5"
+                icon="⚠️"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ============================================
+            SECCIÓN DE VARIANTES (si aplica)
+        ============================================ */}
+        {hasVariants && (
+          <div className="border-t pt-4">
+            <VariantManager
+              variants={variants}
+              onChange={setVariants}
+              parentSku={formData.sku}
+            />
+          </div>
+        )}
+
+        {/* ============================================
+            DESCRIPCIÓN E IMÁGENES (solo si NO tiene variantes)
+        ============================================ */}
+        {!hasVariants && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                rows="4"
+                placeholder="Describe el producto..."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Imágenes del producto
+              </label>
+              <MultiImageUpload
+                onImagesChange={handleImagesChange}
+                initialImages={formData.images}
+                label="Subir imágenes"
+              />
+            </div>
+          </>
+        )}
         
-        {/* Múltiples imágenes con Cloudinary */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Imágenes del producto
-          </label>
-          <MultiImageUpload
-            onImagesChange={handleImagesChange}
-            initialImages={formData.images}
-            label="Subir imágenes"
-          />
-        </div>
-        
+        {/* Destacado */}
         <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
           <input
             type="checkbox"
@@ -190,10 +343,11 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
             className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
           />
           <label htmlFor="isFeatured" className="text-sm text-gray-700 cursor-pointer">
-            ⭐ Producto destacado (aparecerá en la sección de destacados)
+            ⭐ Producto destacado
           </label>
         </div>
         
+        {/* Botones */}
         <div className="flex gap-3 pt-4 border-t border-gray-100">
           <Button
             type="submit"

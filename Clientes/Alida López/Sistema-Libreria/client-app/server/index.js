@@ -5,6 +5,10 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
 
+
+const http = require('http');
+const socketIo = require('socket.io');
+
 const { generalLimiter } = require('./shared/middleware/rateLimit');
 
 // Cargar variables de entorno desde .env
@@ -12,6 +16,15 @@ dotenv.config();
 
 // Crear la aplicación de Express
 const app = express();
+
+
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "http://localhost:5173", // Tu frontend
+    methods: ["GET", "POST"]
+  }
+});
 
 // ============================================
 // MIDDLEWARES DE SEGURIDAD
@@ -76,6 +89,65 @@ app.use('/api/inventory', require('./modules/inventory/routes/inventory'));
 app.use('/api/pos', require('./modules/pos/routes/pos'));
 
 app.use('/api/employees', require('./modules/admin/routes/employees'));
+
+
+
+// ============================================
+// SOCKET.IO - CONEXIONES
+// ============================================
+// Almacenar usuarios conectados
+const connectedUsers = new Map(); // { userId: socketId }
+
+io.on('connection', (socket) => {
+  console.log('Cliente conectado:', socket.id);
+  
+  socket.on('register-user', (userId) => {
+    console.log(`📝 Intentando registrar usuario: ${userId}`);
+    console.log(`🔍 Tipo de userId: ${typeof userId}`);
+    
+    if (userId) {
+      connectedUsers.set(userId.toString(), socket.id);
+      console.log(`✅ Usuario ${userId} registrado con socket ${socket.id}`);
+      console.log('Usuarios conectados:', Array.from(connectedUsers.keys()));
+      
+      // Confirmar al cliente
+      socket.emit('user-registered', { success: true, userId });
+    } else {
+      console.log('❌ No se recibió userId');
+    }
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('Cliente desconectado:', socket.id);
+    for (let [userId, socketId] of connectedUsers.entries()) {
+      if (socketId === socket.id) {
+        connectedUsers.delete(userId);
+        console.log(`Usuario ${userId} eliminado de la lista`);
+        break;
+      }
+    }
+  });
+});
+
+// ============================================
+// FUNCIÓN PARA ENVIAR NOTIFICACIÓN
+// ============================================
+const sendNotification = (userId, notification) => {
+  const socketId = connectedUsers.get(userId);
+  if (socketId) {
+    io.to(socketId).emit('new-notification', notification);
+    console.log(`Notificación enviada a ${userId}:`, notification);
+    return true;
+  }
+  console.log(`Usuario ${userId} no conectado`);
+  return false;
+};
+
+
+app.set('sendNotification', sendNotification);
+app.set('io', io);
+
+
 // Conectar a MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/mi-app')
   .then(() => console.log('✅ Conectado a MongoDB'))
@@ -83,6 +155,6 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/mi-app')
 
 // Iniciar el servidor
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
 });

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../login/contexts/AuthContext';
 import { useModules } from '../../core/contexts/ModuleContext';
+import { usePermissions } from '../../core/hooks/usePermissions';
 import api from '../../../shared/services/api';
 import ProductsManager from './ProductsManager';
 import CategoriesManager from './CategoriesManager';
@@ -16,15 +17,16 @@ import POSDashboard from '../../pos/pages/POSDashboard';
 import EmployeesManager from './EmployeesManager';
 
 export default function AdminDashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout } = useAuth(); 
   const { modules, hasModule } = useModules();
+  const { permissions, isAdmin, isEmployee } = usePermissions();
   const [availableModules, setAvailableModules] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(null);
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
-  const [activeTab, setActiveTab] = useState('modules');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const hasAccounting = hasModule('accounting');
@@ -82,26 +84,65 @@ export default function AdminDashboard() {
     return <div className="p-8 text-center">Cargando...</div>;
   }
 
-  // Menú items para móvil
-  const menuItems = [
-    { id: 'modules', label: 'Módulos', icon: '🔌', show: true },
-    ...(hasEcommerce ? [
-      { id: 'products', label: 'Productos', icon: '📦', group: 'ECOMMERCE' },
-      { id: 'categories', label: 'Categorías', icon: '🏷️', group: 'ECOMMERCE' },
-      { id: 'orders', label: 'Pedidos', icon: '📋', group: 'ECOMMERCE' },
-      { id: 'coupons', label: 'Cupones', icon: '🏷️', group: 'ECOMMERCE' }
-    ] : []),
-    ...(hasAccounting ? [
-      { id: 'accounting', label: 'Contabilidad', icon: '💰', group: 'CONTABILIDAD' }
-    ] : []),
-    ...(hasAppointments ? [
-      { id: 'services', label: 'Servicios', icon: '✂️', group: 'RESERVAS' },
-      { id: 'bookings', label: 'Reservas', icon: '📅', group: 'RESERVAS' }
-    ] : []),
-    ...(hasLandingCustomization ? [
-      { id: 'landing', label: 'Landing Page', icon: '🎨', group: 'PERSONALIZACIÓN' }
-    ] : [])
-  ];
+  // ============================================
+  // CONSTRUIR MENÚ SEGÚN PERMISOS
+  // ============================================
+  const menuItems = [];
+
+  // Dashboard - siempre visible
+  menuItems.push({ id: 'dashboard', label: 'Dashboard', icon: '📊' });
+
+  // Módulos - solo admin
+  if (isAdmin) {
+    menuItems.push({ id: 'modules', label: 'Módulos', icon: '🔌' });
+  }
+
+  // Empleados - solo admin
+  if (isAdmin) {
+    menuItems.push({ id: 'employees', label: 'Empleados', icon: '👥' });
+  }
+
+  // Ecommerce / Productos
+  if ((hasEcommerce || hasInventory) && (isAdmin || permissions.canViewProducts)) {
+    menuItems.push({ id: 'products', label: 'Productos', icon: '📦' });
+    menuItems.push({ id: 'categories', label: 'Categorías', icon: '🏷️' });
+  }
+
+  // Pedidos
+  if (hasEcommerce && (isAdmin || permissions.canViewOrders)) {
+    menuItems.push({ id: 'orders', label: 'Pedidos', icon: '📋' });
+  }
+
+  // Cupones - solo admin
+  if (hasEcommerce && isAdmin) {
+    menuItems.push({ id: 'coupons', label: 'Cupones', icon: '🏷️' });
+  }
+
+  // Contabilidad
+  if (hasAccounting && (isAdmin || permissions.canViewAccounting)) {
+    menuItems.push({ id: 'accounting', label: 'Contabilidad', icon: '💰' });
+  }
+
+  // Reservas
+  if (hasAppointments && (isAdmin || permissions.canViewAppointments)) {
+    menuItems.push({ id: 'services', label: 'Servicios', icon: '✂️' });
+    menuItems.push({ id: 'bookings', label: 'Reservas', icon: '📅' });
+  }
+
+  // Inventario
+  if (hasInventory && (isAdmin || permissions.canViewInventory)) {
+    menuItems.push({ id: 'inventory', label: 'Inventario', icon: '📦' });
+  }
+
+  // POS
+  if (hasPOS && (isAdmin || permissions.canUsePOS)) {
+    menuItems.push({ id: 'pos', label: 'Punto de Venta', icon: '💳' });
+  }
+
+  // Landing Page - solo admin
+  if (hasLandingCustomization && isAdmin) {
+    menuItems.push({ id: 'landing', label: 'Landing Page', icon: '🎨' });
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -119,43 +160,31 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* Menú móvil desplegable */}
+      {/* Menú móvil */}
       {mobileMenuOpen && (
         <div className="lg:hidden fixed top-14 left-0 right-0 bg-gray-800 text-white z-40 max-h-[calc(100vh-56px)] overflow-y-auto">
           <div className="p-4 border-b border-gray-700">
             <p className="text-sm text-gray-400">{user?.name}</p>
+            {isEmployee && <p className="text-xs text-yellow-400 mt-1">⚠️ Rol: Empleado</p>}
           </div>
           <nav className="p-4 space-y-2">
-            {menuItems.map((item, idx) => {
-              const prevItem = menuItems[idx - 1];
-              const showGroup = item.group && (!prevItem || prevItem.group !== item.group);
-              return (
-                <div key={item.id}>
-                  {showGroup && (
-                    <p className="text-xs text-gray-400 px-4 py-2 mt-2">{item.group}</p>
-                  )}
-                  <button
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                      activeTab === item.id 
-                        ? 'bg-blue-600' 
-                        : 'hover:bg-gray-700'
-                    }`}
-                  >
-                    <span>{item.icon}</span>
-                    <span>{item.label}</span>
-                  </button>
-                </div>
-              );
-            })}
+            {menuItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
+                  activeTab === item.id ? 'bg-blue-600' : 'hover:bg-gray-700'
+                }`}
+              >
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
             <div className="border-t border-gray-700 my-3"></div>
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left bg-red-600 hover:bg-red-700"
-            >
+            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left bg-red-600 hover:bg-red-700">
               <span>🚪</span>
               <span>Cerrar Sesión</span>
             </button>
@@ -168,205 +197,25 @@ export default function AdminDashboard() {
         <div className="p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold">Panel Admin</h2>
           <p className="text-sm text-gray-400 mt-1">{user?.name}</p>
+          {isEmployee && <p className="text-xs text-yellow-400 mt-1">⚠️ Rol: Empleado</p>}
         </div>
         
         <nav className="p-4 space-y-2">
-          {/* Módulos */}
-          <button
-            onClick={() => setActiveTab('modules')}
-            className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-              activeTab === 'modules' 
-                ? 'bg-blue-600' 
-                : 'hover:bg-gray-700'
-            }`}
-          >
-            <span>🔌</span>
-            <span>Módulos</span>
-          </button>
-          {user?.role === 'admin' && (
+          {menuItems.map((item) => (
             <button
-              onClick={() => setActiveTab('employees')}
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                activeTab === 'employees' ? 'bg-blue-600' : 'hover:bg-gray-700'
+                activeTab === item.id ? 'bg-blue-600' : 'hover:bg-gray-700'
               }`}
             >
-              <span>👥</span>
-              <span>Empleados</span>
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
             </button>
-          )}
-          {/* Ecommerce */}
-          {hasEcommerce && (
-            <>
-              <div className="border-t border-gray-700 my-3"></div>
-              <p className="text-xs text-gray-400 px-4 py-1">🛍️ ECOMMERCE</p>
-              <button
-                onClick={() => setActiveTab('products')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                  activeTab === 'products' 
-                    ? 'bg-blue-600' 
-                    : 'hover:bg-gray-700'
-                }`}
-              >
-                <span>📦</span>
-                <span>Productos</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('categories')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                  activeTab === 'categories' 
-                    ? 'bg-blue-600' 
-                    : 'hover:bg-gray-700'
-                }`}
-              >
-                <span>🏷️</span>
-                <span>Categorías</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('orders')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                  activeTab === 'orders' 
-                    ? 'bg-blue-600' 
-                    : 'hover:bg-gray-700'
-                }`}
-              >
-                <span>📋</span>
-                <span>Pedidos</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('coupons')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                  activeTab === 'coupons' 
-                    ? 'bg-blue-600' 
-                    : 'hover:bg-gray-700'
-                }`}
-              >
-                <span>🏷️</span>
-                <span>Cupones</span>
-              </button>
-            </>
-          )}
-
-          {/* Contabilidad */}
-          {hasAccounting && (
-            <>
-              <div className="border-t border-gray-700 my-3"></div>
-              <p className="text-xs text-gray-400 px-4 py-1">💰 CONTABILIDAD</p>
-              <button
-                onClick={() => setActiveTab('accounting')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                  activeTab === 'accounting' 
-                    ? 'bg-blue-600' 
-                    : 'hover:bg-gray-700'
-                }`}
-              >
-                <span>💰</span>
-                <span>Contabilidad</span>
-              </button>
-            </>
-          )}
-
-          {/* Reservas */}
-          {hasAppointments && (
-            <>
-              <div className="border-t border-gray-700 my-3"></div>
-              <p className="text-xs text-gray-400 px-4 py-1">📅 RESERVAS</p>
-              <button
-                onClick={() => setActiveTab('services')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                  activeTab === 'services' ? 'bg-blue-600' : 'hover:bg-gray-700'
-                }`}
-              >
-                <span>✂️</span>
-                <span>Servicios</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('bookings')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                  activeTab === 'bookings' ? 'bg-blue-600' : 'hover:bg-gray-700'
-                }`}
-              >
-                <span>📅</span>
-                <span>Reservas</span>
-              </button>
-            </>
-          )}
-
-          {hasInventory &&  (
-            <>
-              <div className="border-t border-gray-700 my-3"></div>
-                <p className="text-xs text-gray-400 px-4 py-1">📦 INVENTARIO</p>
-                <button
-                  onClick={() => setActiveTab('inventory')}
-                  className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                    activeTab === 'inventory' ? 'bg-blue-600' : 'hover:bg-gray-700'
-                  }`}
-                >
-                  <span>📦</span>
-                  <span>Inventario</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('products')}
-                  className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                    activeTab === 'products' 
-                      ? 'bg-blue-600' 
-                      : 'hover:bg-gray-700'
-                  }`}
-                >
-                  <span>📦</span>
-                  <span>Productos</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('categories')}
-                  className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                    activeTab === 'categories' 
-                      ? 'bg-blue-600' 
-                      : 'hover:bg-gray-700'
-                  }`}
-                >
-                  <span>🏷️</span>
-                  <span>Categorías</span>
-                </button>
-              </>
-          )}
-          {hasPOS && (
-            <>
-              <div className="border-t border-gray-700 my-3"></div>
-              <p className="text-xs text-gray-400 px-4 py-1">💳 POS</p>
-              <button
-                onClick={() => setActiveTab('pos')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                  activeTab === 'pos' ? 'bg-blue-600' : 'hover:bg-gray-700'
-                }`}
-              >
-                <span>💳</span>
-                <span>Punto de Venta</span>
-              </button>
-            </>
-          )}
-          {/* Landing Page */}
-          {hasLandingCustomization && (
-            <>
-              <div className="border-t border-gray-700 my-3"></div>
-              <p className="text-xs text-gray-400 px-4 py-1">🎨 PERSONALIZACIÓN</p>
-              <button
-                onClick={() => setActiveTab('landing')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left ${
-                  activeTab === 'landing' 
-                    ? 'bg-blue-600' 
-                    : 'hover:bg-gray-700'
-                }`}
-              >
-                <span>🎨</span>
-                <span>Landing Page</span>
-              </button>
-            </>
-          )}
+          ))}
           
           <div className="border-t border-gray-700 my-3"></div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left bg-red-600 hover:bg-red-700"
-          >
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition text-left bg-red-600 hover:bg-red-700">
             <span>🚪</span>
             <span>Cerrar Sesión</span>
           </button>
@@ -374,21 +223,29 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Contenido principal */}
-      <main className={`lg:ml-64 pt-14 lg:pt-0 min-h-screen transition-all duration-300`}>
+      <main className="lg:ml-64 pt-14 lg:pt-0 min-h-screen transition-all duration-300">
         <div className="p-4 md:p-6">
-          {/* Mensaje de alerta */}
           {message && (
             <div className="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
               {message}
             </div>
           )}
 
-          {/* ============================================
-              PESTAÑA: MÓDULOS (contratación)
-              ============================================ */}
-          {activeTab === 'modules' && (
+          {/* Dashboard Home */}
+          {activeTab === 'dashboard' && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-xl font-semibold mb-4">Bienvenido, {user?.name}</h2>
+              <p className="text-gray-600">
+                {isAdmin 
+                  ? 'Tienes acceso completo a todos los módulos.' 
+                  : 'Tienes acceso limitado según los permisos asignados por el administrador.'}
+              </p>
+            </div>
+          )}
+
+          {/* Módulos (solo admin) */}
+          {activeTab === 'modules' && isAdmin && (
             <>
-              {/* Módulos activos */}
               <div className="bg-white rounded-lg shadow mb-8">
                 <div className="p-6 border-b">
                   <h2 className="text-xl font-semibold">Módulos Activos</h2>
@@ -411,18 +268,13 @@ export default function AdminDashboard() {
                         </div>
                       );
                     })}
-                    {Object.values(modules || {}).filter(v => v === true).length === 0 && (
-                      <p className="text-gray-500 col-span-full">No tienes módulos activos. ¡Contrata algunos!</p>
-                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Módulos disponibles */}
               <div className="bg-white rounded-lg shadow mb-8">
                 <div className="p-6 border-b">
                   <h2 className="text-xl font-semibold">Módulos Disponibles</h2>
-                  <p className="text-gray-600 text-sm">Contrata nuevos módulos para potenciar tu negocio</p>
                 </div>
                 <div className="p-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -434,20 +286,13 @@ export default function AdminDashboard() {
                           <p className="text-gray-600 text-sm mb-4">{module.description}</p>
                           <div className="text-2xl font-bold text-blue-600 mb-4">
                             ${module.price}
-                            <span className="text-sm font-normal text-gray-500"> (pago único)</span>
                           </div>
                           {module.isActive ? (
-                            <button
-                              disabled
-                              className="w-full bg-gray-300 text-gray-500 py-2 rounded cursor-not-allowed"
-                            >
+                            <button disabled className="w-full bg-gray-300 text-gray-500 py-2 rounded cursor-not-allowed">
                               Ya activo
                             </button>
                           ) : (
-                            <button
-                              onClick={() => setShowModal(module)}
-                              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-                            >
+                            <button onClick={() => setShowModal(module)} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
                               Contratar
                             </button>
                           )}
@@ -457,60 +302,41 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-
-              {/* Historial de solicitudes */}
-              {requests.length > 0 && (
-                <div className="bg-white rounded-lg shadow">
-                  <div className="p-6 border-b">
-                    <h2 className="text-xl font-semibold">Historial de Solicitudes</h2>
-                  </div>
-                  <div className="p-6 overflow-x-auto">
-                    <div className="space-y-3">
-                      {requests.map(req => (
-                        <div key={req._id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                          <div>
-                            <p className="font-medium">{req.moduleName}</p>
-                            <p className="text-sm text-gray-500">
-                              Solicitado: {new Date(req.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div>
-                            <span className={`px-2 py-1 rounded text-sm ${
-                              req.status === 'approved' ? 'bg-green-100 text-green-700' :
-                              req.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                              'bg-yellow-100 text-yellow-700'
-                            }`}>
-                              {req.status === 'approved' ? 'Aprobado' :
-                               req.status === 'rejected' ? 'Rechazado' :
-                               'Pendiente'}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
           )}
 
-          {/* ============================================
-              CONTENIDO DE CADA PESTAÑA
-              ============================================ */}
-          {activeTab === 'products' && hasEcommerce && <ProductsManager />}
-          {activeTab === 'categories' && hasEcommerce && <CategoriesManager />}
-          {activeTab === 'orders' && hasEcommerce && <OrdersManager />}
-          {activeTab === 'coupons' && <CouponsManager />}
-          {activeTab === 'accounting' && hasAccounting && <AccountingDashboard />}
-          {activeTab === 'services' && hasAppointments && <ServicesManager />}
-          {activeTab === 'bookings' && hasAppointments && <BookingsManager />}
-          {activeTab === 'landing' && hasLandingCustomization && <SectionsManager />}
-          {activeTab === 'inventory' && hasInventory && <InventoryManager />}
-          {activeTab === 'products' && hasInventory && <ProductsManager />}
-          {activeTab === 'categories' && hasInventory && <CategoriesManager />}
-          {activeTab === 'pos' && hasPOS && <POSDashboard />}
-          {activeTab === 'employees' && user?.role === 'admin' && <EmployeesManager />}
+          {/* Empleados (solo admin) */}
+          {activeTab === 'employees' && isAdmin && <EmployeesManager />}
 
+          {/* Productos */}
+          {activeTab === 'products' && (hasEcommerce || hasInventory) && <ProductsManager />}
+
+          {/* Categorías */}
+          {activeTab === 'categories' && (hasEcommerce || hasInventory) && <CategoriesManager />}
+
+          {/* Pedidos */}
+          {activeTab === 'orders' && hasEcommerce && <OrdersManager />}
+
+          {/* Cupones */}
+          {activeTab === 'coupons' && hasEcommerce && <CouponsManager />}
+
+          {/* Contabilidad */}
+          {activeTab === 'accounting' && hasAccounting && <AccountingDashboard />}
+
+          {/* Servicios */}
+          {activeTab === 'services' && hasAppointments && <ServicesManager />}
+
+          {/* Reservas */}
+          {activeTab === 'bookings' && hasAppointments && <BookingsManager />}
+
+          {/* Landing Page */}
+          {activeTab === 'landing' && hasLandingCustomization && isAdmin && <SectionsManager />}
+
+          {/* Inventario */}
+          {activeTab === 'inventory' && hasInventory && <InventoryManager />}
+
+          {/* POS */}
+          {activeTab === 'pos' && hasPOS && <POSDashboard />}
         </div>
       </main>
 
@@ -519,33 +345,22 @@ export default function AdminDashboard() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-xl font-semibold mb-4">Contratar {showModal.name}</h3>
-            <p className="text-gray-600 mb-4">
-              Precio: <span className="font-bold text-blue-600">${showModal.price}</span> (pago único)
-            </p>
+            <p className="text-gray-600 mb-4">Precio: <span className="font-bold text-blue-600">${showModal.price}</span></p>
             <textarea
-              placeholder="¿Alguna nota adicional? (opcional)"
+              placeholder="¿Alguna nota adicional?"
               className="w-full p-2 border rounded mb-4"
               rows="3"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
             <div className="flex gap-3">
-              <button
-                onClick={() => handleRequestModule(showModal)}
-                className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-              >
+              <button onClick={() => handleRequestModule(showModal)} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
                 Solicitar
               </button>
-              <button
-                onClick={() => setShowModal(null)}
-                className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
-              >
+              <button onClick={() => setShowModal(null)} className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400">
                 Cancelar
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-4">
-              Al solicitar, te contactaremos para coordinar el pago. Una vez confirmado, el módulo se activará automáticamente.
-            </p>
           </div>
         </div>
       )}
