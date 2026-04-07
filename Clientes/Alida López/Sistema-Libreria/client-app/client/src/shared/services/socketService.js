@@ -7,7 +7,7 @@ let pendingUserId = null;
 export const initSocket = (userId) => {
   if (!socket) {
     console.log('🔄 Inicializando socket en puerto 5000');
-    socket = io('https://alida-lopez-jh-systems.onrender.com');
+    socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000');
     
     socket.on('connect', () => {
       console.log('✅ Socket conectado, ID:', socket.id);
