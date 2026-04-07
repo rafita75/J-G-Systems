@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../../../modules/core/components/UI/Button';
 import Input from '../../../modules/core/components/UI/Input';
+import api from '../../../shared/services/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -17,12 +18,18 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
+
     try {
-      await login(email, password);
-      navigate('/admin');
+      const data = await login(email.trim(), password.trim());
+
+      // 🔥 usa data directamente
+      if (data.user) {
+        navigate('/admin');
+      }
+
     } catch (err) {
-      setError('Credenciales incorrectas');
+      console.error("ERROR LOGIN:", err.response?.data);
+      setError(err.response?.data?.error || 'Credenciales incorrectas');
     } finally {
       setLoading(false);
     }

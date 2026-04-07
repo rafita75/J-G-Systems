@@ -39,6 +39,7 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     if (!loginEnabled) throw new Error('Login no disponible');
     const { data } = await api.post('/auth/login', { email, password });
+    console.log("LOGIN DATA:", data);
     localStorage.setItem('token', data.token);
     setUser(data.user);
     setPermissions(data.user.permissions);

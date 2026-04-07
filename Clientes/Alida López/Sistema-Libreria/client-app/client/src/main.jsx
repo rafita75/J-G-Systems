@@ -20,13 +20,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ModuleProvider>
       <AuthProvider>
-        <SectionProvider>
+       {/*  <SectionProvider> */}
           <CartProvider>
             <WishlistProvider>
               <App />
             </WishlistProvider>
           </CartProvider>
-        </SectionProvider>
+        {/* </SectionProvider> */}
       </AuthProvider>
     </ModuleProvider>
   </React.StrictMode>

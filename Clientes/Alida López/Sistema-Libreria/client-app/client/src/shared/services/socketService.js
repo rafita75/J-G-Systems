@@ -6,8 +6,8 @@ let pendingUserId = null;
 
 export const initSocket = (userId) => {
   if (!socket) {
-    console.log('🔄 Inicializando socket en puerto 5001');
-    socket = io('http://localhost:5001');
+    console.log('🔄 Inicializando socket en puerto 5000');
+    socket = io('https://alida-lopez-jh-systems.onrender.com');
     
     socket.on('connect', () => {
       console.log('✅ Socket conectado, ID:', socket.id);
