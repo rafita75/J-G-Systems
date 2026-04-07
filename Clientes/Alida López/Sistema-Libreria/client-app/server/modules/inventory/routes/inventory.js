@@ -9,15 +9,32 @@ const Product = mongoose.model('Product');
 const router = express.Router();
 
 // ============================================
-// OBTENER PRODUCTOS CON STOCK BAJO
+// FUNCIONES DE VERIFICACIÓN DE PERMISOS
 // ============================================
+function canViewInventory(req) {
+  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'employee' && req.user.viewInventory) return true;
+  return false;
+}
+
+function canAdjustStock(req) {
+  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'employee' && req.user.adjustStock) return true;
+  return false;
+}
+
+// ============================================
+// RUTAS DE INVENTARIO
+// ============================================
+
 router.get('/low-stock', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canViewInventory(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver inventario' });
     }
     
     const products = await Product.find({
+      hasVariants: { $ne: true },
       $expr: { $lt: ['$stock', { $ifNull: ['$minStock', 5] }] }
     }).populate('categoryId');
     
@@ -28,22 +45,18 @@ router.get('/low-stock', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// OBTENER RESUMEN DE INVENTARIO
-// ============================================
 router.get('/summary', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canViewInventory(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver inventario' });
     }
     
     const totalProducts = await Product.countDocuments();
-    
-    // Calcular total de variantes
     const productsWithVariants = await Product.find({ hasVariants: true });
     const totalVariants = productsWithVariants.reduce((sum, p) => sum + (p.variants?.length || 0), 0);
     
     const lowStockProducts = await Product.countDocuments({
+      hasVariants: { $ne: true },
       $expr: { $lt: ['$stock', { $ifNull: ['$minStock', 5] }] }
     });
     const outOfStock = await Product.countDocuments({ stock: 0 });
@@ -65,16 +78,13 @@ router.get('/summary', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// AJUSTAR STOCK DE UN PRODUCTO
-// ============================================
 router.put('/products/:id/stock', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canAdjustStock(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ajustar stock' });
     }
     
-    const { quantity, reason, type = 'adjustment' } = req.body;
+    const { quantity, reason, type = 'adjustment', purchasePrice } = req.body;
     const product = await Product.findById(req.params.id);
     
     if (!product) {
@@ -103,6 +113,39 @@ router.put('/products/:id/stock', auth, async (req, res) => {
     });
     await movement.save();
     
+    if (quantity > 0 && purchasePrice && purchasePrice > 0) {
+      const Expense = require('../../accounting/models/Expense');
+      const CashMovement = require('../../accounting/models/CashMovement');
+      
+      const montoGasto = quantity * purchasePrice;
+      
+      const expense = new Expense({
+        monto: montoGasto,
+        categoria: 'insumos',
+        descripcion: `Compra de inventario - ${product.name}`,
+        comprobante: '',
+        recurrente: false,
+        notas: `Cantidad: ${quantity} x Q${purchasePrice} = Q${montoGasto}. Motivo: ${reason || 'Reposición de stock'}`,
+        creadoPor: req.user.id
+      });
+      await expense.save();
+      
+      const lastMovement = await CashMovement.findOne().sort({ fecha: -1 });
+      const saldoAnterior = lastMovement ? lastMovement.saldoNuevo : 0;
+      const saldoNuevo = saldoAnterior - montoGasto;
+      
+      const cashMovement = new CashMovement({
+        tipo: 'gasto',
+        monto: montoGasto,
+        descripcion: `Compra de inventario - ${product.name}`,
+        referenciaId: expense._id,
+        referenciaModelo: 'Expense',
+        saldoAnterior,
+        saldoNuevo
+      });
+      await cashMovement.save();
+    }
+    
     res.json({ product, movement });
   } catch (error) {
     console.error(error);
@@ -110,13 +153,10 @@ router.put('/products/:id/stock', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// OBTENER HISTORIAL DE MOVIMIENTOS
-// ============================================
 router.get('/movements', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canViewInventory(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver inventario' });
     }
     
     const { limit = 50, productId } = req.query;
@@ -136,13 +176,10 @@ router.get('/movements', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// ACTUALIZAR STOCK MÍNIMO
-// ============================================
 router.put('/products/:id/min-stock', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canAdjustStock(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ajustar stock' });
     }
     
     const { minStock } = req.body;
@@ -163,15 +200,10 @@ router.put('/products/:id/min-stock', auth, async (req, res) => {
   }
 });
 
-// server/modules/inventory/routes/inventory.js - Agrega al final
-
-// ============================================
-// OBTENER VENTAS AGRUPADAS (para historial)
-// ============================================
 router.get('/sales', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canViewInventory(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver inventario' });
     }
     
     const { limit = 20, startDate, endDate } = req.query;
@@ -195,13 +227,10 @@ router.get('/sales', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// OBTENER MOVIMIENTOS CON FILTROS
-// ============================================
 router.get('/movements/filtered', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canViewInventory(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver inventario' });
     }
     
     const { startDate, endDate, type, productId, limit = 50 } = req.query;
@@ -229,13 +258,10 @@ router.get('/movements/filtered', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// OBTENER PRODUCTOS CON STOCK BAJO (incluye variantes)
-// ============================================
 router.get('/low-stock-variants', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canViewInventory(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver inventario' });
     }
     
     const products = await Product.find({ hasVariants: true });
@@ -265,13 +291,10 @@ router.get('/low-stock-variants', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// AJUSTAR STOCK DE UNA VARIANTE
-// ============================================
 router.put('/variants/:productId/:variantId/stock', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canAdjustStock(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ajustar stock' });
     }
     
     const { quantity, reason, purchasePrice } = req.body;
@@ -295,7 +318,6 @@ router.put('/variants/:productId/:variantId/stock', auth, async (req, res) => {
     
     variant.stock = newStock;
     
-    // Actualizar stock total del producto
     const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
     product.stock = totalStock;
     
@@ -313,19 +335,37 @@ router.put('/variants/:productId/:variantId/stock', auth, async (req, res) => {
     });
     await movement.save();
     
-    // Si es una compra, registrar gasto
-    if (quantity > 0 && purchasePrice) {
-      const Expense = require("../../accounting/models/Expense");
+    if (quantity > 0 && purchasePrice && purchasePrice > 0) {
+      const Expense = require('../../accounting/models/Expense');
+      const CashMovement = require('../../accounting/models/CashMovement');
+      
+      const montoGasto = quantity * purchasePrice;
+      
       const expense = new Expense({
-        tipo: "compra_inventario",
-        monto: quantity * purchasePrice,
+        monto: montoGasto,
+        categoria: 'insumos',
         descripcion: `Compra de inventario - ${product.name} - ${variant.name}`,
-        metodo: "transferencia",
-        proveedor: reason || "Proveedor",
-        notas: `Cantidad: ${quantity} x Q${purchasePrice} = Q${quantity * purchasePrice}`,
+        comprobante: '',
+        recurrente: false,
+        notas: `Cantidad: ${quantity} x Q${purchasePrice} = Q${montoGasto}`,
         creadoPor: req.user.id
       });
       await expense.save();
+      
+      const lastMovement = await CashMovement.findOne().sort({ fecha: -1 });
+      const saldoAnterior = lastMovement ? lastMovement.saldoNuevo : 0;
+      const saldoNuevo = saldoAnterior - montoGasto;
+      
+      const cashMovement = new CashMovement({
+        tipo: 'gasto',
+        monto: montoGasto,
+        descripcion: `Compra de inventario - ${product.name} - ${variant.name}`,
+        referenciaId: expense._id,
+        referenciaModelo: 'Expense',
+        saldoAnterior,
+        saldoNuevo
+      });
+      await cashMovement.save();
     }
     
     res.json({ product, variant, movement });
@@ -335,13 +375,10 @@ router.put('/variants/:productId/:variantId/stock', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// OBTENER ESTADÍSTICAS PARA GRÁFICA
-// ============================================
 router.get('/stats/movements', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canViewInventory(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver inventario' });
     }
     
     const { days = 7 } = req.query;

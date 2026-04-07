@@ -7,7 +7,34 @@ const User = require('../../login/models/User');
 const router = express.Router();
 
 // ============================================
-// OBTENER TODOS LOS PRODUCTOS (público)
+// FUNCIONES DE VERIFICACIÓN DE PERMISOS
+// ============================================
+function canViewProducts(req) {
+  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'employee' && req.user.viewProducts) return true;
+  return false;
+}
+
+function canCreateProducts(req) {
+  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'employee' && req.user.createProducts) return true;
+  return false;
+}
+
+function canEditProducts(req) {
+  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'employee' && req.user.editProducts) return true;
+  return false;
+}
+
+function canDeleteProducts(req) {
+  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'employee' && req.user.deleteProducts) return true;
+  return false;
+}
+
+// ============================================
+// RUTAS PÚBLICAS
 // ============================================
 router.get('/', async (req, res) => {
   try {
@@ -46,9 +73,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ============================================
-// OBTENER PRODUCTOS DESTACADOS (público)
-// ============================================
 router.get('/featured', async (req, res) => {
   try {
     const products = await Product.find({ isActive: true, isFeatured: true })
@@ -60,9 +84,6 @@ router.get('/featured', async (req, res) => {
   }
 });
 
-// ============================================
-// OBTENER PRODUCTO POR SLUG (público)
-// ============================================
 router.get('/:slug', async (req, res) => {
   try {
     const product = await Product.findOne({ slug: req.params.slug, isActive: true })
@@ -79,55 +100,55 @@ router.get('/:slug', async (req, res) => {
 });
 
 // ============================================
-// OBTENER TODOS LOS PRODUCTOS (admin)
+// RUTAS ADMIN/EMPLEADOS
 // ============================================
 router.get('/admin/all', auth, async (req, res) => {
   try {
-    if (req.user.role === 'admin' || req.user.role === 'superadmin') {
-      const products = await Product.find().sort({ createdAt: -1 }).populate('categoryId');
-      return res.json(products);
+    if (!canViewProducts(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para ver productos' });
     }
     
-    if (req.user.role === 'employee') {
-      const user = await User.findById(req.user.id);
-      if (user?.permissions?.viewProducts === true) {
-        const products = await Product.find().sort({ createdAt: -1 }).populate('categoryId');
-        return res.json(products);
-      }
-      return res.status(403).json({ error: 'No tienes permiso' });
-    }
-    
-    return res.status(403).json({ error: 'No autorizado' });
+    const products = await Product.find().sort({ createdAt: -1 }).populate('categoryId');
+    res.json(products);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener productos' });
   }
 });
 
-// ============================================
-// CREAR PRODUCTO (solo admin)
-// ============================================
 router.post('/', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canCreateProducts(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para crear productos' });
     }
     
-    // Limpiar datos antes de guardar
-    const productData = { ...req.body };
+    const productData = req.body;
     
-    // Eliminar SKU si viene vacío (dejar que el middleware lo genere)
     if (productData.sku === '' || !productData.sku) {
       delete productData.sku;
     }
     
-    // Eliminar slug si viene (dejar que el middleware lo genere)
     if (productData.slug === '' || !productData.slug) {
       delete productData.slug;
     }
     
     const product = new Product(productData);
     await product.save();
+    
+    if (product.purchasePrice && product.purchasePrice > 0 && product.stock > 0) {
+      const Expense = require('../../accounting/models/Expense');
+      const expense = new Expense({
+        monto: product.purchasePrice * product.stock,
+        categoria: 'insumos',
+        descripcion: `Compra inicial de inventario - ${product.name}`,
+        comprobante: '',
+        recurrente: false,
+        notas: `Producto nuevo. Cantidad: ${product.stock} x Q${product.purchasePrice} = Q${product.purchasePrice * product.stock}`,
+        creadoPor: req.user.id
+      });
+      await expense.save();
+    }
+    
     res.status(201).json(product);
   } catch (error) {
     console.error('Error al crear producto:', error);
@@ -135,18 +156,13 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// ACTUALIZAR PRODUCTO (solo admin)
-// ============================================
 router.put('/:id', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canEditProducts(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para editar productos' });
     }
     
     const productData = { ...req.body };
-    
-    // No permitir modificar SKU si ya existe
     delete productData.sku;
     
     const product = await Product.findByIdAndUpdate(
@@ -166,13 +182,10 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// ELIMINAR PRODUCTO (solo admin)
-// ============================================
 router.delete('/:id', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!canDeleteProducts(req)) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar productos' });
     }
     
     const product = await Product.findByIdAndDelete(req.params.id);
@@ -186,9 +199,6 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// OBTENER PRODUCTOS RELACIONADOS
-// ============================================
 router.get('/related/:productId', async (req, res) => {
   try {
     const product = await Product.findById(req.params.productId);
@@ -224,9 +234,6 @@ router.get('/related/:productId', async (req, res) => {
   }
 });
 
-// ============================================
-// OBTENER PRODUCTO POR CÓDIGO DE BARRAS
-// ============================================
 router.get('/barcode/:code', async (req, res) => {
   try {
     const product = await Product.findOne({ 

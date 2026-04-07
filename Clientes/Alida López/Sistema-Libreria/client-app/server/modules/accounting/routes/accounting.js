@@ -11,8 +11,27 @@ const SiteConfig = require('../../core/models/SiteConfig');
 const router = express.Router();
 
 // ============================================
+// FUNCIONES DE VERIFICACIÓN DE PERMISOS
+// ============================================
+function canViewAccounting(req) {
+  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'employee' && req.user.viewAccounting) return true;
+  return false;
+}
+
+function canWriteAccounting(req) {
+  if (req.user.role === 'admin') return true;
+  return false;
+}
+
+function canPayDebts(req) {
+  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'employee') return true; // Permitir a empleados pagar deudas
+  return false;
+}
+
+// ============================================
 // MIDDLEWARE PARA VERIFICAR MÓDULO DE CONTABILIDAD
-// (SOLO PARA RUTAS DE LECTURA)
 // ============================================
 async function checkAccountingModule(req, res, next) {
   try {
@@ -32,16 +51,14 @@ async function checkAccountingModule(req, res, next) {
 }
 
 // ============================================
-// RUTAS DE ESCRITURA (SIEMPRE FUNCIONAN)
+// RUTAS DE ESCRITURA (SOLO ADMIN)
 // ============================================
 
-// OBTENER SALDO ACTUAL DE CAJA
 async function getCurrentCashBalance() {
   const lastMovement = await CashMovement.findOne().sort({ fecha: -1 });
   return lastMovement ? lastMovement.saldoNuevo : 0;
 }
 
-// ACTUALIZAR CAJA
 async function updateCash(tipo, monto, descripcion, referenciaId) {
   const saldoAnterior = await getCurrentCashBalance();
   const saldoNuevo = tipo === 'ingreso' ? saldoAnterior + monto : saldoAnterior - monto;
@@ -59,17 +76,13 @@ async function updateCash(tipo, monto, descripcion, referenciaId) {
   return movement;
 }
 
-// REGISTRAR VENTA RÁPIDA (POS) - SIEMPRE FUNCIONA
 router.post('/sale', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canWriteAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
     const { monto, descripcion, metodo, clienteNombre, clienteTelefono, esDeuda, notas } = req.body;
-    
-    console.log('=== REGISTRANDO VENTA ===');
-    console.log('Body recibido:', req.body);
     
     const income = new Income({
       tipo: 'venta_rapida',
@@ -84,12 +97,10 @@ router.post('/sale', auth, async (req, res) => {
     });
     
     await income.save();
-    console.log('Ingreso guardado:', income);
     
     const isDebt = esDeuda === true || esDeuda === 'true';
     
     if (isDebt) {
-      console.log('Creando deuda para cliente:', clienteNombre);
       const debt = new CustomerDebt({
         clienteNombre: clienteNombre || 'Cliente sin nombre',
         clienteTelefono: clienteTelefono || '',
@@ -97,9 +108,7 @@ router.post('/sale', auth, async (req, res) => {
         notas: `Venta: ${descripcion} - ${new Date().toLocaleDateString()}`
       });
       await debt.save();
-      console.log('Deuda creada:', debt);
     } else {
-      console.log('Actualizando caja con ingreso');
       await updateCash('ingreso', monto, `Venta: ${descripcion}`, income._id);
     }
     
@@ -110,10 +119,9 @@ router.post('/sale', auth, async (req, res) => {
   }
 });
 
-// REGISTRAR GASTO - SIEMPRE FUNCIONA
 router.post('/expense', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canWriteAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -132,10 +140,9 @@ router.post('/expense', auth, async (req, res) => {
   }
 });
 
-// REGISTRAR DEUDA DE CLIENTE - SIEMPRE FUNCIONA
 router.post('/customer-debt', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canWriteAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -148,10 +155,9 @@ router.post('/customer-debt', auth, async (req, res) => {
   }
 });
 
-// PAGAR DEUDA DE CLIENTE - SIEMPRE FUNCIONA
 router.put('/customer-debt/:id/pay', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canPayDebts(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -188,10 +194,9 @@ router.put('/customer-debt/:id/pay', auth, async (req, res) => {
   }
 });
 
-// REGISTRAR DEUDA DEL NEGOCIO - SIEMPRE FUNCIONA
 router.post('/business-debt', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canWriteAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -204,10 +209,9 @@ router.post('/business-debt', auth, async (req, res) => {
   }
 });
 
-// PAGAR DEUDA DEL NEGOCIO - SIEMPRE FUNCIONA
 router.put('/business-debt/:id/pay', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canWriteAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -241,10 +245,9 @@ router.put('/business-debt/:id/pay', auth, async (req, res) => {
   }
 });
 
-// SINCRONIZAR PEDIDO ONLINE - SIEMPRE FUNCIONA
 router.post('/sync-order/:orderId', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canWriteAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -283,13 +286,12 @@ router.post('/sync-order/:orderId', auth, async (req, res) => {
 });
 
 // ============================================
-// RUTAS DE LECTURA (SOLO SI MÓDULO ACTIVO)
+// RUTAS DE LECTURA (con permisos)
 // ============================================
 
-// OBTENER DASHBOARD
 router.get('/dashboard', auth, checkAccountingModule, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canViewAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -360,10 +362,9 @@ router.get('/dashboard', auth, checkAccountingModule, async (req, res) => {
   }
 });
 
-// OBTENER INGRESOS
 router.get('/incomes', auth, checkAccountingModule, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canViewAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -380,10 +381,9 @@ router.get('/incomes', auth, checkAccountingModule, async (req, res) => {
   }
 });
 
-// OBTENER GASTOS
 router.get('/expenses', auth, checkAccountingModule, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canViewAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -400,10 +400,9 @@ router.get('/expenses', auth, checkAccountingModule, async (req, res) => {
   }
 });
 
-// OBTENER REPORTE CON GRÁFICAS
 router.get('/report', auth, checkAccountingModule, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!canViewAccounting(req)) {
       return res.status(403).json({ error: 'No autorizado' });
     }
     
@@ -493,6 +492,20 @@ router.get('/report', auth, checkAccountingModule, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al generar reporte' });
+  }
+});
+
+router.get('/customer-debts', auth, async (req, res) => {
+  try {
+    if (!canViewAccounting(req)) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+    
+    const debts = await CustomerDebt.find().sort({ fecha: -1 });
+    res.json(debts);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener deudas' });
   }
 });
 

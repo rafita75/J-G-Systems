@@ -24,47 +24,51 @@ const UserSchema = new mongoose.Schema({
     enum: ['user', 'admin', 'employee', 'superadmin'],
     default: 'user'
   },
-  permissions: {
-    // Productos
-    viewProducts: { type: Boolean, default: false },
-    createProducts: { type: Boolean, default: false },
-    editProducts: { type: Boolean, default: false },
-    deleteProducts: { type: Boolean, default: false },
-    
-    // Pedidos
-    viewOrders: { type: Boolean, default: false },
-    updateOrderStatus: { type: Boolean, default: false },
-    
-    // Reservas
-    viewAppointments: { type: Boolean, default: false },
-    createAppointments: { type: Boolean, default: false },
-    updateAppointmentStatus: { type: Boolean, default: false },
-    
-    // POS / Ventas
-    usePOS: { type: Boolean, default: false },
-    
-    // Contabilidad (solo lectura)
-    viewAccounting: { type: Boolean, default: false },
-    
-    // Clientes
-    viewCustomers: { type: Boolean, default: false },
-    
-    // Perfil propio
-    editOwnProfile: { type: Boolean, default: true },
-    
-    // Empleados (solo admin puede)
-    manageEmployees: { type: Boolean, default: false }
-  },
+  // ============================================
+  // PERMISOS PARA EMPLEADOS
+  // ============================================
+  // Productos
+  viewProducts: { type: Boolean, default: false },
+  createProducts: { type: Boolean, default: false },
+  editProducts: { type: Boolean, default: false },
+  deleteProducts: { type: Boolean, default: false },
+  
+  // Inventario
+  viewInventory: { type: Boolean, default: false },
+  adjustStock: { type: Boolean, default: false },
+  
+  // POS / Ventas
+  usePOS: { type: Boolean, default: false },
+  
+  // Contabilidad
+  viewAccounting: { type: Boolean, default: false },
+  
+  // Clientes
+  viewCustomers: { type: Boolean, default: false },
+  
+  // Pedidos (si se activa ecommerce)
+  viewOrders: { type: Boolean, default: false },
+  updateOrderStatus: { type: Boolean, default: false },
+  
+  // Reservas (si se activa appointments)
+  viewAppointments: { type: Boolean, default: false },
+  createAppointments: { type: Boolean, default: false },
+  updateAppointmentStatus: { type: Boolean, default: false },
+  
+  // Perfil propio
+  editOwnProfile: { type: Boolean, default: true },
+  
+  // Empleados (solo admin)
+  manageEmployees: { type: Boolean, default: false },
+  
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  
   isActive: {
     type: Boolean,
     default: true
   },
-  // NUEVO: guardar dirección de envío
   shippingAddress: {
     phone: { type: String, default: '' },
     address: { type: String, default: '' },
@@ -77,14 +81,10 @@ const UserSchema = new mongoose.Schema({
   }
 });
 
-// Usar función normal (no arrow function) y async/await
+// Encriptar contraseña antes de guardar
 UserSchema.pre('save', async function() {
   const user = this;
-  
-  // Solo encriptar si la contraseña fue modificada
   if (!user.isModified('password')) return;
-  
-  // Encriptar contraseña
   const salt = await bcrypt.genSalt(10);
   user.password = await bcrypt.hash(user.password, salt);
 });
@@ -94,6 +94,4 @@ UserSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-const User = mongoose.model('User', UserSchema);
-
-module.exports = User;
+module.exports = mongoose.model('User', UserSchema);

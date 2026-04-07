@@ -36,11 +36,12 @@ export const getMovementStats = async (days = 7) => {
   return data;
 };
 
-export const adjustStock = async (productId, quantity, reason, type = 'adjustment') => {
+export const adjustStock = async (productId, quantity, reason, purchasePrice = 0) => {
   const { data } = await api.put(`/inventory/products/${productId}/stock`, {
     quantity,
     reason,
-    type
+    purchasePrice,
+    type: 'adjustment'  // 👈 Asegurar que es string, no número
   });
   return data;
 };
@@ -49,7 +50,8 @@ export const adjustVariantStock = async (productId, variantId, quantity, reason,
   const { data } = await api.put(`/inventory/variants/${productId}/${variantId}/stock`, {
     quantity,
     reason,
-    purchasePrice
+    purchasePrice,
+    type: 'adjustment'  // 👈 Asegurar que es string
   });
   return data;
 };

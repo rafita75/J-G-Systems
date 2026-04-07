@@ -82,7 +82,7 @@ router.post('/login', async (req, res) => {
     if (user.role === 'employee' && !user.isActive) {
       return res.status(401).json({ error: 'Usuario desactivado. Contacta al administrador.' });
     }
-    // Solo permitir admin y employee (empleado)
+    
     if (user.role !== 'admin' && user.role !== 'employee') {
       return res.status(403).json({ 
         error: 'Acceso denegado. Solo personal autorizado puede ingresar.',
@@ -90,20 +90,28 @@ router.post('/login', async (req, res) => {
       });
     }
     
-    // Asegurar que el token incluye name, email, role
+    // 👈 Asegurar que los permisos se envíen correctamente
     const token = jwt.sign(
       { 
         id: user._id, 
         name: user.name, 
         email: user.email, 
         role: user.role,
-        permissions: user.permissions || {}
-        
+        viewProducts: user.viewProducts || false,
+        createProducts: user.createProducts || false,
+        editProducts: user.editProducts || false,
+        deleteProducts: user.deleteProducts || false,
+        viewInventory: user.viewInventory || false,
+        adjustStock: user.adjustStock || false,
+        usePOS: user.usePOS || false,
+        viewAccounting: user.viewAccounting || false,
+        viewCustomers: user.viewCustomers || false
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
     
+    // 👈 Devolver el usuario con todos sus permisos
     res.json({
       token,
       user: {
@@ -111,7 +119,17 @@ router.post('/login', async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        permissions: user.permissions || {}
+        isActive: user.isActive,
+        // Permisos
+        viewProducts: user.viewProducts || false,
+        createProducts: user.createProducts || false,
+        editProducts: user.editProducts || false,
+        deleteProducts: user.deleteProducts || false,
+        viewInventory: user.viewInventory || false,
+        adjustStock: user.adjustStock || false,
+        usePOS: user.usePOS || false,
+        viewAccounting: user.viewAccounting || false,
+        viewCustomers: user.viewCustomers || false
       }
     });
   } catch (error) {
@@ -137,7 +155,25 @@ router.get('/verify', async (req, res) => {
       return res.status(401).json({ error: 'Usuario no encontrado' });
     }
     
-    res.json({ user });
+    // 👈 Devolver el usuario con todos sus permisos
+    res.json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+        viewProducts: user.viewProducts || false,
+        createProducts: user.createProducts || false,
+        editProducts: user.editProducts || false,
+        deleteProducts: user.deleteProducts || false,
+        viewInventory: user.viewInventory || false,
+        adjustStock: user.adjustStock || false,
+        usePOS: user.usePOS || false,
+        viewAccounting: user.viewAccounting || false,
+        viewCustomers: user.viewCustomers || false
+      }
+    });
   } catch (error) {
     res.status(401).json({ error: 'Token inválido' });
   }
@@ -204,6 +240,44 @@ router.put('/change-password', auth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al cambiar contraseña' });
+  }
+});
+
+router.get('/me', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    
+    res.json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isActive: user.isActive,
+      permissions: {
+        viewProducts: user.viewProducts || false,
+        createProducts: user.createProducts || false,
+        editProducts: user.editProducts || false,
+        deleteProducts: user.deleteProducts || false,
+        viewInventory: user.viewInventory || false,
+        adjustStock: user.adjustStock || false,
+        usePOS: user.usePOS || false,
+        viewAccounting: user.viewAccounting || false,
+        viewCustomers: user.viewCustomers || false,
+        viewOrders: user.viewOrders || false,
+        updateOrderStatus: user.updateOrderStatus || false,
+        viewAppointments: user.viewAppointments || false,
+        createAppointments: user.createAppointments || false,
+        updateAppointmentStatus: user.updateAppointmentStatus || false,
+        editOwnProfile: user.editOwnProfile !== undefined ? user.editOwnProfile : true,
+        manageEmployees: user.manageEmployees || false
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener perfil' });
   }
 });
 

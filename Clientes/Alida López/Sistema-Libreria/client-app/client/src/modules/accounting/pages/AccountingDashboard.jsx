@@ -67,118 +67,152 @@ export default function AccountingDashboard() {
   };
 
   if (loading) {
-    return <div className="p-8 text-center">Cargando...</div>;
+    return (
+      <div className="flex justify-center items-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <span className="w-1 h-6 bg-green-600 rounded-full"></span>
+            💰 Contabilidad
+          </h2>
+          <p className="text-gray-500 text-sm mt-1">Gestión financiera y control de caja</p>
+        </div>
+      </div>
+
       {message && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">
+        <div className={`p-4 rounded-xl ${message.includes('✅') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
           {message}
         </div>
       )}
 
       {/* Botones de acción rápida */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <button
           onClick={() => setShowSaleModal(true)}
-          className="p-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex flex-col items-center"
+          className="flex flex-col items-center gap-2 p-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-2xl hover:shadow-lg transition-all"
         >
-          <span className="text-2xl mb-2">💰</span>
-          <span className="font-semibold">Venta rápida</span>
+          <span className="text-3xl">💰</span>
+          <span className="font-semibold text-sm">Venta rápida</span>
         </button>
         
         <button
           onClick={() => setShowExpenseModal(true)}
-          className="p-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex flex-col items-center"
+          className="flex flex-col items-center gap-2 p-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-2xl hover:shadow-lg transition-all"
         >
-          <span className="text-2xl mb-2">💸</span>
-          <span className="font-semibold">Gasto</span>
+          <span className="text-3xl">💸</span>
+          <span className="font-semibold text-sm">Gasto</span>
         </button>
         
         <button
           onClick={() => setShowCustomerDebtModal(true)}
-          className="p-4 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition flex flex-col items-center"
+          className="flex flex-col items-center gap-2 p-4 bg-gradient-to-r from-yellow-600 to-yellow-700 text-white rounded-2xl hover:shadow-lg transition-all"
         >
-          <span className="text-2xl mb-2">📝</span>
-          <span className="font-semibold">Deuda de cliente</span>
+          <span className="text-3xl">📝</span>
+          <span className="font-semibold text-sm">Deuda cliente</span>
         </button>
         
         <button
           onClick={() => setShowBusinessDebtModal(true)}
-          className="p-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex flex-col items-center"
+          className="flex flex-col items-center gap-2 p-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-2xl hover:shadow-lg transition-all"
         >
-          <span className="text-2xl mb-2">🏪</span>
-          <span className="font-semibold">Deuda de negocio</span>
+          <span className="text-3xl">🏪</span>
+          <span className="font-semibold text-sm">Deuda negocio</span>
         </button>
-        {/* Botón para reportes 
-        <button
-          onClick={() => setShowReports(true)}
-          className="p-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex flex-col items-center"
-        >
-          <span className="text-2xl mb-2">📊</span>
-          <span className="font-semibold">Reportes</span>
-        </button>*/}
       </div>
 
       {/* Tarjetas de resumen */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-gray-500 text-sm mb-2">Hoy</h3>
-          <div className="text-2xl font-bold text-green-600">
-            +${dashboard?.hoy?.ingresos?.toLocaleString() || 0}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
+            <span className="w-1 h-4 bg-green-500 rounded-full"></span>
+            Hoy
+          </h3>
+          <div className="flex justify-between items-baseline mb-2">
+            <span className="text-gray-500 text-sm">Ingresos</span>
+            <span className="text-xl font-bold text-green-600">+Q{dashboard?.hoy?.ingresos?.toLocaleString() || 0}</span>
           </div>
-          <div className="text-red-500">
-            -${dashboard?.hoy?.gastos?.toLocaleString() || 0}
+          <div className="flex justify-between items-baseline mb-2">
+            <span className="text-gray-500 text-sm">Gastos</span>
+            <span className="text-xl font-bold text-red-600">-Q{dashboard?.hoy?.gastos?.toLocaleString() || 0}</span>
           </div>
-          <div className="border-t mt-2 pt-2 font-semibold">
-            Ganancia: ${dashboard?.hoy?.ganancia?.toLocaleString() || 0}
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-gray-500 text-sm mb-2">Esta semana</h3>
-          <div className="text-2xl font-bold text-green-600">
-            +${dashboard?.semana?.ingresos?.toLocaleString() || 0}
-          </div>
-          <div className="text-red-500">
-            -${dashboard?.semana?.gastos?.toLocaleString() || 0}
-          </div>
-          <div className="border-t mt-2 pt-2 font-semibold">
-            Ganancia: ${dashboard?.semana?.ganancia?.toLocaleString() || 0}
+          <div className="border-t border-gray-100 mt-3 pt-3 flex justify-between items-baseline">
+            <span className="font-semibold text-gray-700">Ganancia</span>
+            <span className={`text-lg font-bold ${dashboard?.hoy?.ganancia >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              Q{dashboard?.hoy?.ganancia?.toLocaleString() || 0}
+            </span>
           </div>
         </div>
         
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-gray-500 text-sm mb-2">Este mes</h3>
-          <div className="text-2xl font-bold text-green-600">
-            +${dashboard?.mes?.ingresos?.toLocaleString() || 0}
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
+            <span className="w-1 h-4 bg-blue-500 rounded-full"></span>
+            Esta semana
+          </h3>
+          <div className="flex justify-between items-baseline mb-2">
+            <span className="text-gray-500 text-sm">Ingresos</span>
+            <span className="text-xl font-bold text-green-600">+Q{dashboard?.semana?.ingresos?.toLocaleString() || 0}</span>
           </div>
-          <div className="text-red-500">
-            -${dashboard?.mes?.gastos?.toLocaleString() || 0}
+          <div className="flex justify-between items-baseline mb-2">
+            <span className="text-gray-500 text-sm">Gastos</span>
+            <span className="text-xl font-bold text-red-600">-Q{dashboard?.semana?.gastos?.toLocaleString() || 0}</span>
           </div>
-          <div className="border-t mt-2 pt-2 font-semibold">
-            Ganancia: ${dashboard?.mes?.ganancia?.toLocaleString() || 0}
+          <div className="border-t border-gray-100 mt-3 pt-3 flex justify-between items-baseline">
+            <span className="font-semibold text-gray-700">Ganancia</span>
+            <span className={`text-lg font-bold ${dashboard?.semana?.ganancia >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              Q{dashboard?.semana?.ganancia?.toLocaleString() || 0}
+            </span>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
+            <span className="w-1 h-4 bg-purple-500 rounded-full"></span>
+            Este mes
+          </h3>
+          <div className="flex justify-between items-baseline mb-2">
+            <span className="text-gray-500 text-sm">Ingresos</span>
+            <span className="text-xl font-bold text-green-600">+Q{dashboard?.mes?.ingresos?.toLocaleString() || 0}</span>
+          </div>
+          <div className="flex justify-between items-baseline mb-2">
+            <span className="text-gray-500 text-sm">Gastos</span>
+            <span className="text-xl font-bold text-red-600">-Q{dashboard?.mes?.gastos?.toLocaleString() || 0}</span>
+          </div>
+          <div className="border-t border-gray-100 mt-3 pt-3 flex justify-between items-baseline">
+            <span className="font-semibold text-gray-700">Ganancia</span>
+            <span className={`text-lg font-bold ${dashboard?.mes?.ganancia >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              Q{dashboard?.mes?.ganancia?.toLocaleString() || 0}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Deudas */}
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Deudas de clientes */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-4">💰 Deudas de clientes</h3>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <span className="w-1 h-5 bg-yellow-500 rounded-full"></span>
+            💰 Deudas de clientes
+          </h3>
           <div className="text-2xl font-bold text-yellow-600 mb-4">
-            Total: ${dashboard?.deudas?.clientes?.total?.toLocaleString() || 0}
+            Q{dashboard?.deudas?.clientes?.total?.toLocaleString() || 0}
           </div>
           {dashboard?.deudas?.clientes?.items?.length > 0 ? (
             <div className="space-y-3 max-h-80 overflow-auto">
               {dashboard.deudas.clientes.items.map((deuda) => (
-                <div key={deuda._id} className="border-b pb-3">
+                <div key={deuda._id} className="border-b border-gray-100 pb-3 last:border-0">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-medium">{deuda.clienteNombre}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="font-medium text-gray-800">{deuda.clienteNombre}</p>
+                      <p className="text-xs text-gray-400">
                         {new Date(deuda.fecha).toLocaleDateString()}
                       </p>
                       {deuda.notas && (
@@ -186,7 +220,7 @@ export default function AccountingDashboard() {
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-yellow-600">${deuda.monto.toLocaleString()}</p>
+                      <p className="font-bold text-yellow-600">Q{deuda.monto.toLocaleString()}</p>
                       {deuda.fechaLimite && (
                         <p className="text-xs text-gray-400">
                           Vence: {new Date(deuda.fechaLimite).toLocaleDateString()}
@@ -194,7 +228,7 @@ export default function AccountingDashboard() {
                       )}
                       <button
                         onClick={() => payCustomerDebt(deuda._id)}
-                        className="mt-2 text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                        className="mt-2 text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition"
                       >
                         Pagar
                       </button>
@@ -204,24 +238,27 @@ export default function AccountingDashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-gray-500">No hay deudas pendientes</p>
+            <p className="text-gray-500 text-center py-4">No hay deudas pendientes</p>
           )}
         </div>
         
         {/* Deudas del negocio */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-4">🏢 Deudas del negocio</h3>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <span className="w-1 h-5 bg-red-500 rounded-full"></span>
+            🏢 Deudas del negocio
+          </h3>
           <div className="text-2xl font-bold text-red-600 mb-4">
-            Total: ${dashboard?.deudas?.negocio?.total?.toLocaleString() || 0}
+            Q{dashboard?.deudas?.negocio?.total?.toLocaleString() || 0}
           </div>
           {dashboard?.deudas?.negocio?.items?.length > 0 ? (
             <div className="space-y-3 max-h-80 overflow-auto">
               {dashboard.deudas.negocio.items.map((deuda) => (
-                <div key={deuda._id} className="border-b pb-3">
+                <div key={deuda._id} className="border-b border-gray-100 pb-3 last:border-0">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-medium">{deuda.proveedor}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="font-medium text-gray-800">{deuda.proveedor}</p>
+                      <p className="text-xs text-gray-400">
                         {new Date(deuda.fecha).toLocaleDateString()}
                       </p>
                       {deuda.notas && (
@@ -229,7 +266,7 @@ export default function AccountingDashboard() {
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-red-600">${deuda.monto.toLocaleString()}</p>
+                      <p className="font-bold text-red-600">Q{deuda.monto.toLocaleString()}</p>
                       {deuda.fechaLimite && (
                         <p className="text-xs text-gray-400">
                           Vence: {new Date(deuda.fechaLimite).toLocaleDateString()}
@@ -237,7 +274,7 @@ export default function AccountingDashboard() {
                       )}
                       <button
                         onClick={() => payBusinessDebt(deuda._id)}
-                        className="mt-2 text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                        className="mt-2 text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition"
                       >
                         Pagar
                       </button>
@@ -247,34 +284,37 @@ export default function AccountingDashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-gray-500">No hay deudas pendientes</p>
+            <p className="text-gray-500 text-center py-4">No hay deudas pendientes</p>
           )}
         </div>
       </div>
 
       {/* Últimos movimientos */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">📋 Últimos movimientos</h3>
-        <div className="text-2xl font-bold mb-4">
-          Saldo en caja: ${dashboard?.caja?.saldoActual?.toLocaleString() || 0}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+          <span className="w-1 h-5 bg-green-500 rounded-full"></span>
+          📋 Últimos movimientos
+        </h3>
+        <div className="text-2xl font-bold text-gray-800 mb-4">
+          Saldo en caja: <span className="text-green-600">Q{dashboard?.caja?.saldoActual?.toLocaleString() || 0}</span>
         </div>
         <div className="space-y-2 max-h-96 overflow-auto">
           {dashboard?.caja?.ultimosMovimientos?.length > 0 ? (
             dashboard.caja.ultimosMovimientos.map((mov) => (
-              <div key={mov._id} className="flex justify-between items-center border-b pb-2">
+              <div key={mov._id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
                 <div>
-                  <p className="font-medium">{mov.descripcion}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="font-medium text-gray-800">{mov.descripcion}</p>
+                  <p className="text-xs text-gray-400">
                     {new Date(mov.fecha).toLocaleString()}
                   </p>
                 </div>
                 <div className={`font-bold ${mov.tipo === 'ingreso' ? 'text-green-600' : 'text-red-600'}`}>
-                  {mov.tipo === 'ingreso' ? '+' : '-'}${mov.monto.toLocaleString()}
+                  {mov.tipo === 'ingreso' ? '+' : '-'}Q{mov.monto.toLocaleString()}
                 </div>
               </div>
             ))
           ) : (
-            <p className="text-gray-500">No hay movimientos registrados</p>
+            <p className="text-gray-500 text-center py-4">No hay movimientos registrados</p>
           )}
         </div>
       </div>

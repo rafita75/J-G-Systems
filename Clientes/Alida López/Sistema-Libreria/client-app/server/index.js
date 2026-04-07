@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
+const connectDB = require('./db');
 
 
 const http = require('http');
@@ -16,7 +17,7 @@ dotenv.config();
 
 // Crear la aplicación de Express
 const app = express();
-
+connectDB();
 
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -91,7 +92,6 @@ app.use('/api/pos', require('./modules/pos/routes/pos'));
 app.use('/api/employees', require('./modules/admin/routes/employees'));
 
 
-
 // ============================================
 // SOCKET.IO - CONEXIONES
 // ============================================
@@ -143,18 +143,5 @@ const sendNotification = (userId, notification) => {
   return false;
 };
 
-
 app.set('sendNotification', sendNotification);
 app.set('io', io);
-
-
-// Conectar a MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/mi-app')
-  .then(() => console.log('✅ Conectado a MongoDB'))
-  .catch(err => console.error('❌ Error conectando a MongoDB:', err));
-
-// Iniciar el servidor
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-});

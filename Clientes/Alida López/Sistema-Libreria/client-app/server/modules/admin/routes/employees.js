@@ -7,13 +7,12 @@ const { requireAdmin } = require('../../../shared/middleware/permissions');
 const router = express.Router();
 
 // ============================================
-// OBTENER TODOS LOS EMPLEADOS (solo admin)
+// OBTENER TODOS LOS EMPLEADOS
 // ============================================
 router.get('/', auth, requireAdmin, async (req, res) => {
   try {
     const employees = await User.find({ 
-      role: 'employee',
-      createdBy: req.user.id 
+      role: 'employee'
     }).select('-password').sort({ createdAt: -1 });
     
     res.json(employees);
@@ -24,13 +23,19 @@ router.get('/', auth, requireAdmin, async (req, res) => {
 });
 
 // ============================================
-// CREAR EMPLEADO (solo admin)
+// CREAR EMPLEADO
 // ============================================
 router.post('/', auth, requireAdmin, async (req, res) => {
   try {
-    const { name, email, password, permissions } = req.body;
+    const { 
+      name, email, password,
+      viewProducts, createProducts, editProducts, deleteProducts,
+      viewInventory, adjustStock,
+      usePOS,
+      viewAccounting,
+      viewCustomers
+    } = req.body;
     
-    // Verificar si ya existe
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: 'El email ya está registrado' });
@@ -41,34 +46,29 @@ router.post('/', auth, requireAdmin, async (req, res) => {
       email,
       password,
       role: 'employee',
-      permissions: permissions || {
-        viewProducts: false,
-        createProducts: false,
-        editProducts: false,
-        deleteProducts: false,
-        viewOrders: false,
-        updateOrderStatus: false,
-        viewAppointments: false,
-        createAppointments: false,
-        updateAppointmentStatus: false,
-        usePOS: false,
-        viewAccounting: false,
-        viewCustomers: false,
-        editOwnProfile: true,
-        manageEmployees: false
-      },
+      isActive: true,
+      // Productos
+      viewProducts: viewProducts || false,
+      createProducts: createProducts || false,
+      editProducts: editProducts || false,
+      deleteProducts: deleteProducts || false,
+      // Inventario
+      viewInventory: viewInventory || false,
+      adjustStock: adjustStock || false,
+      // POS
+      usePOS: usePOS || false,
+      // Contabilidad
+      viewAccounting: viewAccounting || false,
+      // Clientes
+      viewCustomers: viewCustomers || false,
       createdBy: req.user.id
     });
     
     await employee.save();
     
-    res.status(201).json({
-      id: employee._id,
-      name: employee.name,
-      email: employee.email,
-      role: employee.role,
-      permissions: employee.permissions
-    });
+    // Devolver el empleado creado
+    const savedEmployee = await User.findById(employee._id).select('-password');
+    res.status(201).json(savedEmployee);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al crear empleado' });
@@ -76,33 +76,55 @@ router.post('/', auth, requireAdmin, async (req, res) => {
 });
 
 // ============================================
-// ACTUALIZAR EMPLEADO (solo admin)
+// ACTUALIZAR EMPLEADO
 // ============================================
 router.put('/:id', auth, requireAdmin, async (req, res) => {
   try {
-    const { name, email, password, permissions, isActive } = req.body;
-    const employee = await User.findOne({ _id: req.params.id, role: 'employee', createdBy: req.user.id });
+    const { 
+      name, email, password, isActive,
+      viewProducts, createProducts, editProducts, deleteProducts,
+      viewInventory, adjustStock,
+      usePOS,
+      viewAccounting,
+      viewCustomers
+    } = req.body;
+    
+    const employee = await User.findOne({ _id: req.params.id, role: 'employee' });
     
     if (!employee) {
       return res.status(404).json({ error: 'Empleado no encontrado' });
     }
     
-    if (name) employee.name = name;
-    if (email) employee.email = email;
-    if (permissions) employee.permissions = permissions;
+    // Actualizar campos básicos
+    if (name !== undefined) employee.name = name;
+    if (email !== undefined) employee.email = email;
     if (isActive !== undefined) employee.isActive = isActive;
-    if (password) employee.password = password;
+    if (password && password.trim()) employee.password = password;
+    
+    // Actualizar permisos de productos
+    if (viewProducts !== undefined) employee.viewProducts = viewProducts;
+    if (createProducts !== undefined) employee.createProducts = createProducts;
+    if (editProducts !== undefined) employee.editProducts = editProducts;
+    if (deleteProducts !== undefined) employee.deleteProducts = deleteProducts;
+    
+    // Actualizar permisos de inventario
+    if (viewInventory !== undefined) employee.viewInventory = viewInventory;
+    if (adjustStock !== undefined) employee.adjustStock = adjustStock;
+    
+    // Actualizar permisos de POS
+    if (usePOS !== undefined) employee.usePOS = usePOS;
+    
+    // Actualizar permisos de contabilidad
+    if (viewAccounting !== undefined) employee.viewAccounting = viewAccounting;
+    
+    // Actualizar permisos de clientes
+    if (viewCustomers !== undefined) employee.viewCustomers = viewCustomers;
     
     await employee.save();
     
-    res.json({
-      id: employee._id,
-      name: employee.name,
-      email: employee.email,
-      role: employee.role,
-      permissions: employee.permissions,
-      isActive: employee.isActive
-    });
+    // Devolver el empleado actualizado
+    const updatedEmployee = await User.findById(employee._id).select('-password');
+    res.json(updatedEmployee);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al actualizar empleado' });
@@ -110,14 +132,13 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
 });
 
 // ============================================
-// ELIMINAR EMPLEADO (solo admin)
+// ELIMINAR EMPLEADO
 // ============================================
 router.delete('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const employee = await User.findOneAndDelete({ 
       _id: req.params.id, 
-      role: 'employee',
-      createdBy: req.user.id 
+      role: 'employee'
     });
     
     if (!employee) {

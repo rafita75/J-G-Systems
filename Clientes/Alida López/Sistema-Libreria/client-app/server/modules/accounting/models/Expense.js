@@ -10,7 +10,8 @@ const ExpenseSchema = new mongoose.Schema({
   categoria: {
     type: String,
     enum: ['insumos', 'servicios', 'renta', 'sueldos', 'publicidad', 'transporte', 'otros'],
-    required: true
+    required: true,
+    default: 'insumos'
   },
   descripcion: {
     type: String,

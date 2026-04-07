@@ -8,13 +8,10 @@ export function usePermissions() {
   const isEmployee = user?.role === 'employee';
   const isSuperAdmin = user?.role === 'superadmin';
 
-  // Permisos del empleado (vienen del backend)
-  const employeePermissions = user?.permissions || {};
-
   // Función para verificar un permiso específico
   const hasPermission = (permission) => {
-    if (isAdmin || isSuperAdmin) return true; // Admin tiene todo
-    if (isEmployee) return employeePermissions[permission] === true;
+    if (isAdmin || isSuperAdmin) return true;
+    if (isEmployee) return user?.[permission] === true;
     return false;
   };
 

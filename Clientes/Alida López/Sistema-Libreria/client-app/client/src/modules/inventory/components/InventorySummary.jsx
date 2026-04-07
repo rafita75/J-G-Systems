@@ -1,7 +1,6 @@
 // client/src/modules/inventory/components/InventorySummary.jsx
 import { useState, useEffect } from 'react';
 import { getInventorySummary, getLowStockVariants } from '../services/inventoryService';
-import Card from '../../core/components/UI/Card';
 
 export default function InventorySummary() {
   const [summary, setSummary] = useState(null);
@@ -29,9 +28,9 @@ export default function InventorySummary() {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[1, 2, 3, 4].map(i => (
-          <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse"></div>
+          <div key={i} className="h-28 bg-gray-100 rounded-2xl animate-pulse"></div>
         ))}
       </div>
     );
@@ -44,7 +43,7 @@ export default function InventorySummary() {
       icon: '📦', 
       bgColor: 'bg-blue-50', 
       textColor: 'text-blue-600',
-      borderColor: 'border-blue-200'
+      borderColor: 'border-blue-100'
     },
     { 
       label: 'Variantes', 
@@ -52,7 +51,7 @@ export default function InventorySummary() {
       icon: '🎨', 
       bgColor: 'bg-purple-50', 
       textColor: 'text-purple-600',
-      borderColor: 'border-purple-200'
+      borderColor: 'border-purple-100'
     },
     { 
       label: 'Stock bajo', 
@@ -60,7 +59,7 @@ export default function InventorySummary() {
       icon: '⚠️', 
       bgColor: 'bg-yellow-50', 
       textColor: 'text-yellow-600',
-      borderColor: 'border-yellow-200',
+      borderColor: 'border-yellow-100',
       subtitle: `${summary?.lowStockProducts || 0} productos · ${lowStockVariantsCount} variantes`
     },
     { 
@@ -69,26 +68,26 @@ export default function InventorySummary() {
       icon: '💰', 
       bgColor: 'bg-green-50', 
       textColor: 'text-green-600',
-      borderColor: 'border-green-200'
+      borderColor: 'border-green-100'
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
       {stats.map((stat, idx) => (
         <div 
           key={idx} 
-          className={`${stat.bgColor} ${stat.borderColor} border rounded-2xl p-4 transition-all hover:shadow-md`}
+          className={`${stat.bgColor} border ${stat.borderColor} rounded-2xl p-5 transition-all hover:shadow-md`}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{stat.label}</p>
               <p className={`text-3xl font-bold ${stat.textColor}`}>{stat.value}</p>
               {stat.subtitle && (
-                <p className="text-xs text-gray-400 mt-1">{stat.subtitle}</p>
+                <p className="text-xs text-gray-400 mt-2">{stat.subtitle}</p>
               )}
             </div>
-            <div className={`text-4xl opacity-80 ${stat.textColor}`}>{stat.icon}</div>
+            <div className={`text-3xl opacity-70 ${stat.textColor}`}>{stat.icon}</div>
           </div>
         </div>
       ))}

@@ -16,7 +16,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
   const [error, setError] = useState('');
   
   // ============================================
-  // CAMPOS GENERALES (siempre visibles)
+  // CAMPOS GENERALES
   // ============================================
   const [formData, setFormData] = useState({
     name: product?.name || '',
@@ -56,9 +56,6 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
     }
   }, [variants, hasVariants]);
 
-  // ============================================
-  // HANDLERS
-  // ============================================
   const handleImagesChange = (images) => {
     setFormData(prev => ({ ...prev, images: images }));
   };
@@ -72,7 +69,6 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
     setLoading(true);
     setError('');
     
-    // Limpiar SKU temporal si es producto nuevo
     const submitData = {
       ...formData,
       price: parseFloat(formData.price) || 0,
@@ -86,7 +82,6 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
       variants: hasVariants ? variants : []
     };
     
-    // Si es producto nuevo, eliminar SKU para que el backend lo genere
     if (!product) {
       delete submitData.sku;
     }
@@ -104,7 +99,6 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
         result = await createProduct(submitData);
       }
       
-      // Actualizar el SKU devuelto por el backend
       if (result && result.sku) {
         setFormData(prev => ({ ...prev, sku: result.sku }));
       }
@@ -118,8 +112,9 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-soft p-6 animate-fade-in max-h-[90vh] overflow-auto">
-      <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-h-[90vh] overflow-auto">
+      <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+        <span className="w-1 h-6 bg-green-600 rounded-full"></span>
         {product ? '✏️ Editar Producto' : '➕ Nuevo Producto'}
       </h3>
       
@@ -130,18 +125,16 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
       )}
       
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* ============================================
-            PRIMERO: ¿TIENE VARIANTES?
-        ============================================ */}
-        <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+        {/* ¿TIENE VARIANTES? */}
+        <div className="bg-green-50 rounded-xl p-4 border border-green-200">
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
               checked={hasVariants}
               onChange={(e) => setHasVariants(e.target.checked)}
-              className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500"
+              className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
             />
-            <span className="font-medium text-gray-900">
+            <span className="font-medium text-gray-800">
               Este producto tiene variantes (tallas, colores, versiones)
             </span>
           </label>
@@ -150,9 +143,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
           </p>
         </div>
 
-        {/* ============================================
-            CAMPOS GENERALES (siempre visibles)
-        ============================================ */}
+        {/* CAMPOS GENERALES */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
             label="Nombre del producto *"
@@ -173,7 +164,8 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
             onChange={handleChange}
             placeholder="Se genera automáticamente al guardar"
             icon="🔢"
-            disabled={!!product}
+            disabled={true}
+            className="bg-gray-50"
           />
         </div>
         
@@ -184,7 +176,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
             type="text"
             value={formData.brand}
             onChange={handleChange}
-            placeholder="Ej: Nike, Adidas, Editorial Planeta"
+            placeholder="Ej: Nike, Adidas"
             icon="🏷️"
           />
           
@@ -201,7 +193,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
-            label="Fecha de vencimiento (opcional)"
+            label="Fecha de vencimiento"
             name="expiryDate"
             type="date"
             value={formData.expiryDate}
@@ -215,7 +207,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
               name="categoryId"
               value={formData.categoryId}
               onChange={handleChange}
-              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+              className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
             >
               <option value="">Sin categoría</option>
               {categories.map((cat) => (
@@ -225,12 +217,10 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
           </div>
         </div>
 
-        {/* ============================================
-            SECCIÓN SIN VARIANTES (precio, stock, código)
-        ============================================ */}
+        {/* SECCIÓN SIN VARIANTES */}
         {!hasVariants && (
-          <div className="border-t pt-4">
-            <h4 className="font-medium text-gray-900 mb-3">Información de inventario</h4>
+          <div className="border-t border-gray-100 pt-4">
+            <h4 className="font-medium text-gray-800 mb-3">Información de inventario</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Precio de compra"
@@ -266,7 +256,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
               />
               
               <Input
-                label="Stock *"
+                label="Stock"
                 name="stock"
                 type="number"
                 value={formData.stock}
@@ -274,7 +264,15 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
                 placeholder="0"
                 required={!hasVariants}
                 icon="📊"
+                disabled={true}
+                className="bg-gray-50 cursor-not-allowed"
               />
+              
+              {product && (
+                <p className="text-xs text-gray-400 mt-1 col-span-2">
+                  ⚠️ El stock no se puede editar aquí. Usa el módulo de <strong className="text-green-600">Inventario</strong> para ajustar el stock.
+                </p>
+              )}
               
               <Input
                 label="Stock mínimo (alerta)"
@@ -289,11 +287,9 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
           </div>
         )}
 
-        {/* ============================================
-            SECCIÓN DE VARIANTES (si aplica)
-        ============================================ */}
+        {/* SECCIÓN DE VARIANTES */}
         {hasVariants && (
-          <div className="border-t pt-4">
+          <div className="border-t border-gray-100 pt-4">
             <VariantManager
               variants={variants}
               onChange={setVariants}
@@ -302,9 +298,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
           </div>
         )}
 
-        {/* ============================================
-            DESCRIPCIÓN E IMÁGENES (solo si NO tiene variantes)
-        ============================================ */}
+        {/* DESCRIPCIÓN E IMÁGENES */}
         {!hasVariants && (
           <>
             <div>
@@ -313,7 +307,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
-                className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
                 rows="4"
                 placeholder="Describe el producto..."
               />
@@ -340,7 +334,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
             id="isFeatured"
             checked={formData.isFeatured}
             onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
-            className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
           />
           <label htmlFor="isFeatured" className="text-sm text-gray-700 cursor-pointer">
             ⭐ Producto destacado
@@ -353,7 +347,7 @@ export default function ProductForm({ product, categories, onSuccess, onCancel }
             type="submit"
             variant="primary"
             loading={loading}
-            className="flex-1"
+            className="flex-1 bg-gradient-to-r from-green-600 to-green-700"
           >
             {product ? 'Actualizar Producto' : 'Crear Producto'}
           </Button>

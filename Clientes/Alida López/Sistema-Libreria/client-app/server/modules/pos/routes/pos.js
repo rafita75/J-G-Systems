@@ -8,17 +8,17 @@ const Sale = require('../models/Sale');
 
 const router = express.Router();
 
-// Obtener la función sendNotification desde la app
-const getSendNotification = (req) => {
-  return req.app.get('sendNotification');
-};
-
+function canUsePOS(req) {
+  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'employee' && req.user.usePOS) return true;
+  return false;
+}
 // ============================================
 // BUSCAR PRODUCTO POR CÓDIGO DE BARRAS (incluye variantes)
 // ============================================
 router.get("/product/barcode/:code", auth, async (req, res) => {
   try {
-    if (req.user.role !== "admin" && req.user.role !== "employee") {
+    if (!canUsePOS(req)) {
       return res.status(403).json({ error: "No autorizado" });
     }
 
@@ -82,7 +82,7 @@ router.get("/product/barcode/:code", auth, async (req, res) => {
 // ============================================
 router.get("/products/search", auth, async (req, res) => {
   try {
-    if (req.user.role !== "admin" && req.user.role !== "employee") {
+    if (!canUsePOS(req)) {
       return res.status(403).json({ error: "No autorizado" });
     }
 
@@ -121,7 +121,7 @@ router.get("/products/search", auth, async (req, res) => {
 // ============================================
 router.get("/product/:productId/variants", auth, async (req, res) => {
   try {
-    if (req.user.role !== "admin" && req.user.role !== "employee") {
+    if (!canUsePOS(req)) {
       return res.status(403).json({ error: "No autorizado" });
     }
 
@@ -168,15 +168,15 @@ router.get("/product/:productId/variants", auth, async (req, res) => {
 });
 
 // ============================================
-// REGISTRAR VENTA POS (con notificaciones)
+// REGISTRAR VENTA POS (con notificaciones y movimiento de caja)
 // ============================================
 router.post("/sale", auth, async (req, res) => {
   try {
-    if (req.user.role !== "admin" && req.user.role !== "employee") {
+    if (!canUsePOS(req)) {
       return res.status(403).json({ error: "No autorizado" });
     }
 
-    const { items, clienteNombre, clienteTelefono, paymentMethod, total } = req.body;
+    const { items, clienteNombre, clienteTelefono, paymentMethod, total, esDeuda } = req.body;
     const subtotal = total;
 
     // Validar stock antes de procesar
@@ -274,13 +274,28 @@ router.post("/sale", auth, async (req, res) => {
     
     await sale.save();
 
+    if (esDeuda === true) {
+      const CustomerDebt = require('../../accounting/models/CustomerDebt');
+      
+      const customerDebt = new CustomerDebt({
+        clienteNombre: clienteNombre || "Cliente sin nombre",
+        clienteTelefono: clienteTelefono || "",
+        monto: total,
+        fecha: new Date(),
+        estado: 'pendiente',
+        notas: `Venta #${sale.saleNumber}: ${items.map(i => `${i.name} x${i.quantity}`).join(", ")}`
+      });
+      await customerDebt.save();
+      console.log(`✅ Deuda de cliente registrada: Q${total} - ${clienteNombre}`);
+    }
+
     // Actualizar movimientos con saleId
     for (const movement of movements) {
       movement.saleId = sale._id;
       await movement.save();
     }
 
-    // Registrar en contabilidad
+    // Registrar ingreso en contabilidad
     const Income = require("../../accounting/models/Income");
     const income = new Income({
       tipo: "venta_rapida",
@@ -289,11 +304,37 @@ router.post("/sale", auth, async (req, res) => {
       metodo: paymentMethod,
       clienteNombre: clienteNombre || "Cliente mostrador",
       clienteTelefono: clienteTelefono || "",
-      esDeuda: false,
+      esDeuda: esDeuda === true,
       notas: `Venta #${sale.saleNumber}: ${items.map(i => `${i.name} x${i.quantity}`).join(", ")}`,
       creadoPor: req.user.id
     });
     await income.save();
+
+    // ============================================
+    // REGISTRAR MOVIMIENTO DE CAJA (solo si NO es deuda)
+    // ============================================
+    if (!esDeuda) {
+      const CashMovement = require("../../accounting/models/CashMovement");
+      
+      // Obtener el último saldo
+      const lastMovement = await CashMovement.findOne().sort({ fecha: -1 });
+      const saldoAnterior = lastMovement ? lastMovement.saldoNuevo : 0;
+      const saldoNuevo = saldoAnterior + total;
+      
+      const cashMovement = new CashMovement({
+        tipo: "ingreso",
+        monto: total,
+        descripcion: `Venta POS #${sale.saleNumber} - ${clienteNombre || "Mostrador"}`,
+        referenciaId: sale._id,
+        referenciaModelo: "Sale",
+        saldoAnterior,
+        saldoNuevo
+      });
+      await cashMovement.save();
+      console.log(`✅ Movimiento de caja registrado: +Q${total} - Saldo: Q${saldoNuevo}`);
+    } else {
+      console.log(`⚠️ Venta a crédito (deuda) - No afecta caja: #${sale.saleNumber}`);
+    }
 
     // ============================================
     // ENVIAR NOTIFICACIÓN A ADMINISTRADORES
@@ -306,8 +347,8 @@ router.post("/sale", auth, async (req, res) => {
     const notification = {
       id: sale._id,
       type: 'sale',
-      title: '💰 Nueva venta registrada',
-      body: `${sale.clienteNombre || 'Mostrador'} - Total: Q${sale.total.toLocaleString()}`,
+      title: esDeuda ? '📝 Nueva venta a crédito' : '💰 Nueva venta registrada',
+      body: `${sale.clienteNombre || 'Mostrador'} - Total: Q${sale.total.toLocaleString()}${esDeuda ? ' (Crédito)' : ''}`,
       data: {
         saleNumber: sale.saleNumber,
         total: sale.total,

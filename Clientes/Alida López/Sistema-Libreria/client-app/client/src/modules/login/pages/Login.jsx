@@ -1,9 +1,9 @@
-// src/pages/Login.jsx
+// client/src/modules/login/pages/Login.jsx
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import Button from '../../core/components/UI/Button';
-import Input from '../../core/components/UI/Input';
+import Button from '../../../modules/core/components/UI/Button';
+import Input from '../../../modules/core/components/UI/Input';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -20,7 +20,7 @@ export default function Login() {
     
     try {
       await login(email, password);
-      navigate('/');
+      navigate('/admin');
     } catch (err) {
       setError('Credenciales incorrectas');
     } finally {
@@ -30,25 +30,29 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="bg-white rounded-2xl shadow-hard p-8 w-full max-w-md animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md animate-fade-in border border-gray-100">
+        {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Bienvenido</h1>
-          <p className="text-gray-500 mt-2">Inicia sesión en tu cuenta</p>
+          <div className="w-16 h-16 bg-gradient-to-r from-green-600 to-green-700 rounded-2xl flex items-center justify-center mx-auto shadow-md">
+            <span className="text-white text-2xl font-bold">A&C</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800 mt-4">Librería A&C</h1>
+          <p className="text-gray-500 text-sm mt-1">Sistema de Administración</p>
         </div>
         
         {error && (
-          <div className="mb-6 p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 text-center">
+          <div className="mb-6 p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 text-center text-sm">
             {error}
           </div>
         )}
         
         <form onSubmit={handleSubmit} className="space-y-5">
           <Input
-            label="Email"
+            label="Correo electrónico"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="tu@email.com"
+            placeholder="admin@libreria.com"
             required
             icon="✉️"
           />
@@ -67,19 +71,16 @@ export default function Login() {
             type="submit"
             variant="primary"
             loading={loading}
-            className="w-full"
+            className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
             size="lg"
           >
             Iniciar Sesión
           </Button>
         </form>
         
-        <p className="text-center text-gray-600 mt-6">
-          ¿No tienes cuenta?{' '}
-          <Link to="/register" className="text-primary-600 hover:text-primary-700 font-medium">
-            Regístrate
-          </Link>
-        </p>
+        <div className="mt-6 text-center text-xs text-gray-400">
+          <p>© 2026 Librería A&C - Todos los derechos reservados</p>
+        </div>
       </div>
     </div>
   );
